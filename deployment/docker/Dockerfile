@@ -32,6 +32,15 @@ if "STATIC_ROOT = BASE_DIR / 'staticfiles'" not in t:
 if "STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'" not in t:
     t += "\n\nif not DEBUG:\n    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'\n"
 
+if "SECURE_PROXY_SSL_HEADER" not in t:
+    t += "\nSECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')\nUSE_X_FORWARDED_HOST = True\n"
+
+if "CSRF_TRUSTED_ORIGINS = " not in t:
+    t += "\nCSRF_TRUSTED_ORIGINS = [o.strip() for o in os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',') if o.strip()]\n"
+
+if "SESSION_COOKIE_SECURE = True" not in t:
+    t += "\nif not DEBUG:\n    SESSION_COOKIE_SECURE = True\n    CSRF_COOKIE_SECURE = True\n"
+
 p.write_text(t)
 PY
 

@@ -17,6 +17,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Load backend source from main (runtime only)
+        # We keep deployment config on ci/docker-staging, but backend code lives on main.
+        # This copies backend into the CI workspace only; it does not modify branches.
+        run: |
+          git fetch origin main --depth=1
+          git checkout origin/main -- backend
+          test -f backend/requirements.txt
+          test -f backend/manage.py
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

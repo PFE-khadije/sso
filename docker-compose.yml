@@ -21,29 +21,34 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - DEBUG=${DEBUG}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS}
-      
-      # ---- Suppression des variables individuelles DB_* ----
-      # On utilise uniquement DATABASE_URL pour la connexion Supabase
-      - DATABASE_URL=${DATABASE_URL}      
-      
+      # Connexion à la base de données (Supabase ou autre)
+      - DATABASE_URL=${DATABASE_URL}
       # Redis
       - REDIS_URL=redis://redis:6379/0
-      
       # Encryption
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
-      
       # Email
       - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-noreply@example.com}
+      # URL du service IA (important pour la communication)
+      - AI_SERVICE_URL=http://ai_service:5001
     depends_on:
-      - redis      # plus de "db"
+      - redis
+      - ai_service
     restart: unless-stopped
 
-  #ai_service (commenté) – à réactiver plus tard
-#  ai_service:
-#    build: ./ai_service
- #  container_name: ai_identite
-  #   ports:
-   #    - "5001:5001"
-    # volumes:
-     #  - ./ai_service:/app
-     #restart: unless-stopped
+  ai_service:
+    build:
+      context: .
+      dockerfile: ./ai_service/Dockerfile
+    container_name: ai_identite
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./ai_service:/app
+      - ./ai_service/models:/app/models   
+    environment:
+      - PORT=5001
+      - ONNX_MODEL_PATH=models/facenet.onnx
+      - SIMILARITY_THRESHOLD=0.70
+      - MAX_CONTENT_LENGTH=16777216
+    restart: unless-stopped

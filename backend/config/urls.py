@@ -23,5 +23,5 @@ urlpatterns = [
     path('api/', include('clients.urls')),
     path('o/', include('oauth2_provider.urls', namespace='oauth2_provider')), 
     path('accounts/', include('django.contrib.auth.urls')),
-    #path('openid/', include('oauth2_provider.urls_oidc')),  
+    #path('openid/', include('oauth2_provider.urls_oidc', namespace='oauth2_provider_oidc')),  
 ]

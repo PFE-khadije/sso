@@ -3,11 +3,12 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     UserViewSet, RoleViewSet, PermissionViewSet,
     MFAMethodViewSet, BiometricProfileViewSet, TrustedDeviceViewSet , SignupView, LoginView, LogoutView,
-    TOTPEnableView, TOTPDisableView, TOTPVerifyView, MFAVerifyView ,  UserInfoView
+    TOTPEnableView, TOTPDisableView, TOTPVerifyView, MFAVerifyView ,  UserInfoView , UserMeView , UserAuthMethodsView
     )
 from .views_dashboard import UserAuthorizedAppsView, UserRevokeAppView, UserActivityView ,UserDevicesView, UserDeviceDetailView 
 from rest_framework_simplejwt.views import TokenRefreshView
 from .views_biometric import BiometricEnrollView, BiometricLoginView,BiometricStatusView, BiometricDeleteView
+from clients.views import UserHasClientView
 router = DefaultRouter()
 router.register(r'users', UserViewSet)
 router.register(r'roles', RoleViewSet)
@@ -18,6 +19,7 @@ router.register(r'trusted-devices', TrustedDeviceViewSet,basename='trusteddevice
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('user/me/', UserMeView.as_view(), name='user-me'),
     path('userinfo/', UserInfoView.as_view(), name='userinfo'),
     path('signup/', SignupView.as_view(), name='signup'),
     path('login/', LoginView.as_view(), name='login'),
@@ -36,5 +38,9 @@ urlpatterns = [
     path('biometric/login/', BiometricLoginView.as_view(), name='biometric-login'),
     path('biometric/status/', BiometricStatusView.as_view(), name='biometric-status'),
     path('biometric/delete/', BiometricDeleteView.as_view(), name='biometric-delete'),
+    path('user/has-client/', UserHasClientView.as_view(), name='user-has-client'),
+    path('user/auth-methods/', UserAuthMethodsView.as_view(), name='auth-methods'),
+    
+
     
 ]

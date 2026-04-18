@@ -8,9 +8,13 @@ services:
 
   backend:
     build:
+      
       context: .
       dockerfile: Dockerfile
     container_name: django_identite
+    dns:                    
+      - 8.8.8.8
+      - 1.1.1.1
     command: python manage.py runserver 0.0.0.0:8000
     volumes:
       - ./backend:/app
@@ -38,12 +42,3 @@ services:
       - redis      # plus de "db"
     restart: unless-stopped
 
-  #ai_service (commenté) – à réactiver plus tard
-#  ai_service:
-#    build: ./ai_service
- #  container_name: ai_identite
-  #   ports:
-   #    - "5001:5001"
-    # volumes:
-     #  - ./ai_service:/app
-     #restart: unless-stopped

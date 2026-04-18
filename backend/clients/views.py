@@ -1,29 +1,34 @@
 from django.shortcuts import render
-
+from rest_framework.views import APIView
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from .models import Client, ClientUser, ClientApplication
+from django.utils import timezone
+from datetime import timedelta
+from oauth2_provider.models import AccessToken
+from django.contrib.auth import get_user_model
+from oauth2_provider.generators import generate_client_secret
+
+
 from .serializers import (
     ClientSerializer, ClientDetailSerializer,
     ClientApplicationSerializer, ClientUserSerializer
 )
+from .models import Plan
+from .serializers import PlanSerializer
 from oauth2_provider.models import Application
-from users.permissions import HasRole  # si vous avez cette classe, sinon à créer
+from users.permissions import HasRole  
 
+User = get_user_model()
 
 class ClientViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet pour gérer le client de l'utilisateur connecté.
-    Un utilisateur ne peut voir/modifier que les clients dont il est membre.
-    """
     serializer_class = ClientSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        # L'utilisateur ne voit que les clients dont il est membre
         return Client.objects.filter(members__user=self.request.user)
 
     def get_serializer_class(self):
@@ -32,47 +37,62 @@ class ClientViewSet(viewsets.ModelViewSet):
         return ClientSerializer
 
     def perform_create(self, serializer):
-        # À la création, l'utilisateur devient owner et membre admin
         client = serializer.save(owner=self.request.user)
         ClientUser.objects.create(client=client, user=self.request.user, role='admin')
 
     @action(detail=True, methods=['get', 'post'], url_path='apps')
     def apps(self, request, pk=None):
-        """Gérer les applications OAuth2 du client"""
         client = self.get_object()
         if request.method == 'GET':
             apps = ClientApplication.objects.filter(client=client)
             serializer = ClientApplicationSerializer(apps, many=True)
             return Response(serializer.data)
-
         elif request.method == 'POST':
-            # Créer une nouvelle application OAuth2
             data = request.data
-            # Créer l'application OAuth2
+            plain_secret = generate_client_secret()
             app = Application.objects.create(
                 name=data['name'],
                 client_type=data.get('client_type', 'confidential'),
                 authorization_grant_type=data.get('grant_type', 'authorization-code'),
                 redirect_uris=data.get('redirect_uris', ''),
-                user=request.user  # le propriétaire de l'application
+                user=request.user
             )
-            # Lier au client
+            app.client_secret = plain_secret
+            app.save()
+            app._plain_secret = plain_secret
             client_app = ClientApplication.objects.create(
                 client=client,
                 application=app,
                 is_active=True
             )
-            serializer = ClientApplicationSerializer(client_app)
+            serializer = ClientApplicationSerializer(client_app, context={'request': request})
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        
-    @action(detail=True, methods=['get'], url_path='apps/(?P<app_id>[^/.]+)')
-    def app_detail(self, request, pk=None, app_id=None):
-        """Détail d'une application spécifique du client"""
+
+    @action(detail=True, methods=['get', 'put', 'patch', 'delete'], url_path='apps/(?P<app_id>[0-9]+)')
+    def manage_app(self, request, pk=None, app_id=None):
         client = self.get_object()
-        client_app = get_object_or_404(ClientApplication, client=client, application_id=app_id)
-        serializer = ClientApplicationSerializer(client_app)
-        return Response(serializer.data)  
-    
+        client_app = get_object_or_404(ClientApplication, client=client, id=app_id)  # use id, not application_id
+        app = client_app.application
+        if request.method == 'GET':
+            serializer = ClientApplicationSerializer(client_app)
+            return Response(serializer.data)
+        elif request.method in ['PUT', 'PATCH']:
+            if 'name' in request.data:
+                app.name = request.data['name']
+            if 'redirect_uris' in request.data:
+                app.redirect_uris = request.data['redirect_uris']
+            if 'client_type' in request.data:
+                app.client_type = request.data['client_type']
+            if 'authorization_grant_type' in request.data:
+                app.authorization_grant_type = request.data['authorization_grant_type']
+            app.save()
+            serializer = ClientApplicationSerializer(client_app, context={'request': request})
+            return Response(serializer.data)
+        elif request.method == 'DELETE':
+            client_app.delete()
+            app.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        
     @action(detail=True, methods=['get', 'post'], url_path='team')
     def team(self, request, pk=None):
         """Gérer les membres du client"""
@@ -120,6 +140,19 @@ class ClientViewSet(viewsets.ModelViewSet):
         client_user.delete()
         return Response(status=204)
     
+    @action(detail=True, methods=['post'], url_path='change-plan')
+    def change_plan(self, request, pk=None):
+        client = self.get_object()
+        plan_id = request.data.get('plan_id')
+        try:
+            new_plan = Plan.objects.get(id=plan_id, is_active=True)
+        except Plan.DoesNotExist:
+            return Response({'error': 'Plan invalide'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        client.plan = new_plan
+        client.save()
+        return Response({'detail': 'Plan mis à jour avec succès'})
+
     @action(detail=True, methods=['get'], url_path='stats')
     def stats(self, request, pk=None):
         """Statistiques d'usage du client"""
@@ -159,3 +192,19 @@ class ClientViewSet(viewsets.ModelViewSet):
             'total_applications': total_apps,
             'authentications_last_30_days': auth_count,
         })
+
+class PlanViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Read-only viewset for plans (accessible by authenticated users).
+    """
+    queryset = Plan.objects.filter(is_active=True)
+    serializer_class = PlanSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class UserHasClientView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        has_client = request.user.client_memberships.exists()
+        return Response({'has_client': has_client})

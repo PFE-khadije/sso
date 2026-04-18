@@ -41,8 +41,10 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
-    'oauth2_provider',
+    'oauth2_provider',                     
+    #'oauth2_provider.contrib.openid',  
     'rest_framework_simplejwt.token_blacklist',
+    'corsheaders',
     # mes apps
     'users',
     'clients', 
@@ -50,8 +52,9 @@ INSTALLED_APPS = [
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
         'oauth2_provider.contrib.rest_framework.OAuth2Authentication',
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        
     ),
 }
 
@@ -102,12 +105,20 @@ SIMPLE_JWT = {
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+CORS_ALLOW_CREDENTIALS = True
 
 ROOT_URLCONF = 'config.urls'
 
@@ -182,6 +193,36 @@ OAUTH2_PROVIDER = {
         'email': 'Accès à l’email',
         'phone': 'Accès au téléphone',
     },
+    'OIDC_ENABLED': False, 
+    #'OIDC_ISS_ENDPOINT': 'http://localhost:8000',
+#     'OIDC_RSA_PRIVATE_KEY':"""-----BEGIN PRIVATE KEY-----
+# MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDgLsIVh2ghRyNz
+# mtniL607eJrzqwtZyIFkIrLPwboeC+BrVpaoRNMvwDfgKsRRgBg9gBHgEDezCoZy
+# 2sXrhIIyGHSibWWYRY6kSFgrYDRzcFDHKPi2wY8BkeWOtqIhd7JettEWZwSZsTZz
+# psdNvG8pygUwCy1HTGKrEZoQ7T+aBeK88eVdRgW2wxrE/nR7bzhdKNXIeNHY+xNw
+# jUeah/ofwaEiGLvReLTP4ci8Rnxc4sqWrk6QHyKkjl6B/JzFMoFTi1kqV3jbED6p
+# yNTcsH/a18+stlPweWhjO6CTIj4foFmmHwlmOiaJjfsvaY7g5SNS+qNY4vnfn4Qo
+# 3m2zDMwxAgMBAAECggEACstFjgrQgTWvJ8xPbFwWT7Q9ZbkZGVAVptAi4uz1fKfe
+# vNxU8bIqpvRu3EzC2he8Uw29DphJTkYV9ibBe9cL+8SArSduSlgjB5byI9iEfgBs
+# 60H2Q7prG8y+DFKP2OOuA3By/cylBI9rS0M++me1xIHVIRyQqAut/oWg8OqzcsN5
+# rP25fKL9DXCVgSj83j5Pn2K2Jk2DmZaK9E+rPUwB/bTKDCFHtrXgBbEpJtkGCHtP
+# hvRmqosqGnn0/yFisYcf8RidCLgzA8E+gUITF8sSJY0QRR8mH9nwEHonH+h26ftd
+# 3+GwtVUltfAfjxno9rlK/CTwgWqCPsbjWzw6J16v1wKBgQD98hK1zTP5Od36CUyG
+# qYbE6mIK27okGtIhwKE3PN94LVSBnUnDgvaeiwpwyR7JMjJgwDUMTkVTNy0LU6Ll
+# HQGAnrWY68wQS9vWEDPdZ0xfj8fMC/su1TWMyVtVwRfb5BaPfNnwT9QoYXDxf6p3
+# qvBl+vLurnDxTCjDQ0qedV9S4wKBgQDh/wua8nsij4C8esCmxgIZLWKD77u5s3B+
+# 5xRMpZlQMrKWvkLfzoVvV5uGMTQ0CdhJhvlPUsegKJ5/beyIfOydOa2Kl3EvXiRI
+# mDyhT6c5WhhDYSx2CCeCpqLetlP7PqOPPfPM3Z7R0C8Wz6HhFmBW1+9Qhlec+hSJ
+# eena3/zM2wKBgDs2I3iyhSjaflCbtHU9uAfYIs4nV6qtekuWb8DCd9S8tRSXyShG
+# NBzZjLCppH0DME3w4y2gXne9yMn4UWYcskn8N5mVeXpfRb4O/xjjyiIKE2sXbBUK
+# b7cJCDvhjx+dekkwslxfMLfNqJkWzHekqvMMZXKTyA/rUyHcYdy6v2RDAoGASc48
+# YQcNtbS960//eLez2bsbsFDrsvLqK1eWJo3yauGTt209c9ADfeBTl1icXt5UN3cQ
+# FprHPQPm92DT3aNGtvYuOdPJkBmjqd2l91yHFVDaGa8zkPyKwr1e9XMALE5Bpjcq
+# Vt6NzqG5ry5yBIuFPPdaXabyF/8IE/mvqN57tf8CgYEAl91/I79Fy0r/stFz7Ka5
+# zcJcRXVo5MDdmpnC+OPm87cb8lL729ZQF5ZKFri4iFHc3XzIcS3/fkeIBbHs5QFx
+# eUAJlT5Xw0Xp2yHo8V9uOLfqtVlViu8KPnr3Chdcqjp6osGXidTz2JqS2en0A6PB
+# Bbxr99EmQhfKMCF6a6YE9K4=
+# -----END PRIVATE KEY-----""" ,
     'CLIENT_ID_GENERATOR_CLASS': 'oauth2_provider.generators.ClientIdGenerator',
     'CLIENT_SECRET_GENERATOR_CLASS': 'oauth2_provider.generators.ClientSecretGenerator',
     'ACCESS_TOKEN_EXPIRE_SECONDS': 3600,  # 1 heure
@@ -227,5 +268,12 @@ DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@example.com')
 ENCRYPTION_KEY = os.getenv('ENCRYPTION_KEY')
 if not ENCRYPTION_KEY and DEBUG:
     ENCRYPTION_KEY = Fernet.generate_key().decode()
-    print(f"⚠️  ENCRYPTION_KEY générée automatiquement: {ENCRYPTION_KEY}")
-    print("⚠️  Ajoutez cette clé à votre fichier .env pour la persistance")
+    print(f"  ENCRYPTION_KEY générée automatiquement: {ENCRYPTION_KEY}")
+    print("  Ajoutez cette clé à votre fichier .env pour la persistance")
+
+    LOGGING['loggers']['django'] = {'handlers': ['console'], 'level': 'DEBUG'}
+
+    print(" OIDC_RSA_PRIVATE_KEY present:", bool(OAUTH2_PROVIDER.get('OIDC_RSA_PRIVATE_KEY')))
+print(" Key starts with:", repr(OAUTH2_PROVIDER.get('OIDC_RSA_PRIVATE_KEY', '')[:50]))
+
+AI_SERVICE_URL = os.getenv('AI_SERVICE_URL', 'https://sso-ai-microservice.onrender.com')

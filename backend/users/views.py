@@ -247,15 +247,14 @@ class TOTPEnableView(APIView):
     def get(self, request):
         user = request.user
         if MFAMethod.objects.filter(user=user, method_type='totp', is_active=True).exists():
-            return Response({'detail': 'TOTP déjà activé.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'TOTP already activated.'}, status=status.HTTP_400_BAD_REQUEST)
+
         secret = pyotp.random_base32()
         totp_uri = pyotp.totp.TOTP(secret).provisioning_uri(name=user.email, issuer_name="MaPlateforme")
         qr = qrcode.make(totp_uri)
         buffer = io.BytesIO()
         qr.save(buffer, format="PNG")
         qr_base64 = base64.b64encode(buffer.getvalue()).decode()
-        request.session['totp_secret'] = secret
-        request.session['totp_secret_expires'] = 600
         return Response({
             'secret': secret,
             'uri': totp_uri,
@@ -263,21 +262,26 @@ class TOTPEnableView(APIView):
         })
 
     def post(self, request):
-        secret = request.session.get('totp_secret')
-        if not secret:
-            return Response({'detail': 'Session expirée ou secret manquant. Recommencez.'}, status=status.HTTP_400_BAD_REQUEST)
-        data = request.data.copy()
-        data['secret'] = secret
-        serializer = TOTPVerifySerializer(data=data, context={'request': request})
-        if serializer.is_valid():
-            user = request.user
-            MFAMethod.objects.filter(user=user, method_type='totp').delete()
-            MFAMethod.objects.create(user=user, method_type='totp', secret=secret, is_active=True)
-            user.mfa_enabled = True
-            user.save(update_fields=['mfa_enabled'])
-            del request.session['totp_secret']
-            return Response({'detail': 'TOTP activé avec succès.'})
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        secret = request.data.get('secret')
+        code = request.data.get('code')
+        if not secret or not code:
+            return Response({'detail': 'Secret and code are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        totp = pyotp.TOTP(secret)
+        if not totp.verify(code, valid_window=1):
+            return Response({'detail': 'Invalid code.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = request.user
+        MFAMethod.objects.filter(user=user, method_type='totp').delete()
+        MFAMethod.objects.create(
+            user=user,
+            method_type='totp',
+            secret=secret,
+            is_active=True
+        )
+        user.mfa_enabled = True
+        user.save(update_fields=['mfa_enabled'])
+        return Response({'detail': 'TOTP activated successfully.'})
 
 
 class TOTPDisableView(APIView):

@@ -80,6 +80,7 @@ MIDDLEWARE = [
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+
 ]
 CORS_ALLOW_CREDENTIALS = True
 
@@ -130,7 +131,7 @@ OAUTH2_PROVIDER = {
     },
     'OIDC_ENABLED': True,
     'OIDC_ISS_ENDPOINT': os.getenv('OIDC_ISS_ENDPOINT', 'https://sso-backend-6b1e.onrender.com'),
-    'OIDC_RSA_PRIVATE_KEY': os.getenv('OIDC_RSA_PRIVATE_KEY'),  # Read from environment
+    'OIDC_RSA_PRIVATE_KEY': os.getenv('OIDC_RSA_PRIVATE_KEY'),  
     'CLIENT_ID_GENERATOR_CLASS': 'oauth2_provider.generators.ClientIdGenerator',
     'CLIENT_SECRET_GENERATOR_CLASS': 'oauth2_provider.generators.ClientSecretGenerator',
     'ACCESS_TOKEN_EXPIRE_SECONDS': 3600,

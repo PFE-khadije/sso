@@ -16,6 +16,7 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path ,include
+from oauth2_provider.views.oidc import ConnectDiscoveryInfoView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -24,4 +25,5 @@ urlpatterns = [
     path('o/', include('oauth2_provider.urls', namespace='oauth2_provider')), 
     path('accounts/', include('django.contrib.auth.urls')),
     #path('openid/', include('oauth2_provider.urls_oidc', namespace='oauth2_provider_oidc')),  
+    path('.well-known/openid-configuration', oidc_views.ConnectDiscoveryInfoView.as_view(), name='oidc-discovery'),
 ]

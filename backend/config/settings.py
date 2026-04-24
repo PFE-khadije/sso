@@ -283,3 +283,5 @@ AI_SERVICE_URL = os.getenv('AI_SERVICE_URL', 'https://sso-ai-microservice.onrend
 CSRF_TRUSTED_ORIGINS = [
     "https://sso-backend-6b1e.onrender.com",
 ]
+CSRF_COOKIE_SECURE = True          # send cookie only over HTTPS
+SESSION_COOKIE_SECURE = True       # same for session cookie

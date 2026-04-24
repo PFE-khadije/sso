@@ -164,7 +164,7 @@ class APITester:
         print("\n--- Testing Create OAuth Application ---")
         app_data = {
             'name': f"Test App {random.randint(1, 9999)}",
-            'redirect_uris': 'https://example.com/callback',
+            'redirect_uris': 'https://oauth.pstmn.io/v1/callback',
             'client_type': 'confidential',
             'grant_type': 'authorization-code'
         }

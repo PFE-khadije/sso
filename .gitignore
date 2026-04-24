@@ -4,6 +4,8 @@ __pycache__/
 *.pyo
 *.pyd
 *.pem
+test.py
+tests/
 
 # Virtual environment
 venv/

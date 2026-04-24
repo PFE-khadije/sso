@@ -1,8 +1,9 @@
-from django.db import models
 
 from django.db import models
 from django.contrib.auth import get_user_model
 from oauth2_provider.models import Application
+from django.core.exceptions import ValidationError
+from django.utils.text import slugify
 
 User = get_user_model()
 
@@ -27,6 +28,15 @@ class Client(models.Model):
     is_active = models.BooleanField(default=True)
     logo = models.ImageField(upload_to='client_logos/', blank=True, null=True)  # stockage local
     primary_color = models.CharField(max_length=7, default='#000000')
+
+    def save(self, *args, **kwargs):
+        if not self.name or not self.name.strip():
+            raise ValidationError("Client name cannot be empty")
+        if not self.slug:
+            self.slug = slugify(self.name)
+        if not self.slug:
+            raise ValidationError("Could not generate a valid slug from name")
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name

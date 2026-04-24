@@ -18,6 +18,7 @@ from cryptography.fernet import Fernet
 
 
 
+
 load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -142,21 +143,11 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 
 AUTH_USER_MODEL = 'users.User'
-# Database
 
 
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql',
-#         'NAME': os.getenv('DB_NAME'),
-#         'USER': os.getenv('DB_USER'),
-#         'PASSWORD': os.getenv('DB_PASSWORD'),
-#         'HOST': os.getenv('DB_HOST'),
-#         'PORT': os.getenv('DB_PORT'),
-#     }
-# }
-import os
-from dotenv import load_dotenv
+
+
+
 
 # Charger le fichier .env
 load_dotenv()
@@ -256,10 +247,7 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
-# Redis configuration (ajoutez ceci après les autres configurations)
-#REDIS_HOST = os.getenv('REDIS_HOST', 'redis')
-#REDIS_PORT = os.getenv('REDIS_PORT', 6379)
-#REDIS_DB = os.getenv('REDIS_DB', 0)
+# Redis configuration 
 REDIS_URL = os.getenv('REDIS_URL')
 CELERY_BROKER_URL = os.getenv('REDIS_URL')
 CELERY_RESULT_BACKEND = os.getenv('REDIS_URL')
@@ -290,3 +278,8 @@ if not ENCRYPTION_KEY and DEBUG:
 print(" Key starts with:", repr(OAUTH2_PROVIDER.get('OIDC_RSA_PRIVATE_KEY', '')[:50]))
 
 AI_SERVICE_URL = os.getenv('AI_SERVICE_URL', 'https://sso-ai-microservice.onrender.com')
+
+# CSRF settings
+CSRF_TRUSTED_ORIGINS = [
+    "https://sso-backend-6b1e.onrender.com",
+]

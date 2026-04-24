@@ -1,10 +1,10 @@
 services:
-  redis:
-    image: redis:7
-    container_name: redis_identite
-    ports:
-      - "6379:6379"
-    restart: unless-stopped
+  #redis:
+   # image: redis:7
+    #container_name: redis_identite
+    #ports:
+     # - "6379:6379"
+    #restart: unless-stopped
 
   backend:
     build:
@@ -31,14 +31,13 @@ services:
       - DATABASE_URL=${DATABASE_URL}      
       
       # Redis
-      - REDIS_URL=redis://redis:6379/0
+      - REDIS_URL=${REDIS_URL}   
       
       # Encryption
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       
       # Email
       - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-noreply@example.com}
-    depends_on:
-      - redis      # plus de "db"
+        
     restart: unless-stopped
 

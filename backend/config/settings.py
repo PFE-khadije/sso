@@ -257,12 +257,24 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
 # Redis configuration (ajoutez ceci après les autres configurations)
-REDIS_HOST = os.getenv('REDIS_HOST', 'redis')
-REDIS_PORT = os.getenv('REDIS_PORT', 6379)
-REDIS_DB = os.getenv('REDIS_DB', 0)
+#REDIS_HOST = os.getenv('REDIS_HOST', 'redis')
+#REDIS_PORT = os.getenv('REDIS_PORT', 6379)
+#REDIS_DB = os.getenv('REDIS_DB', 0)
+REDIS_URL = os.getenv('REDIS_URL')
+CELERY_BROKER_URL = os.getenv('REDIS_URL')
+CELERY_RESULT_BACKEND = os.getenv('REDIS_URL')
 
-# Vérifiez aussi que DEFAULT_FROM_EMAIL est défini pour les emails
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@example.com')
+if DEBUG:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = os.getenv('BREVO_HOST', 'smtp-relay.brevo.com')
+    EMAIL_PORT = int(os.getenv('BREVO_PORT', 587))
+    EMAIL_USE_TLS = True
+    EMAIL_HOST_USER = os.getenv('BREVO_USER')
+    EMAIL_HOST_PASSWORD = os.getenv('BREVO_SMTP_KEY')
+    DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL')
+
 
 # Clé de chiffrement pour les données sensibles (MFA, biométrie)
 # Générer une clé avec: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"

@@ -7,12 +7,15 @@ from rest_framework import status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.decorators import action        
+from django.utils import timezone
+from datetime import timedelta
 from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 from rest_framework_simplejwt.exceptions import TokenError
 from oauth2_provider.contrib.rest_framework import OAuth2Authentication
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
-from .models import User, Role, Permission, MFAMethod, BiometricProfile, TrustedDevice
+from .models import User, Role, Permission, MFAMethod, BiometricProfile, TrustedDevice   
 from .serializers import (
     UserSerializer, RoleSerializer, PermissionSerializer,
     MFAMethodSerializer, BiometricProfileSerializer, TrustedDeviceSerializer,
@@ -20,8 +23,7 @@ from .serializers import (
     TOTPVerifySerializer, TOTPDisableSerializer
 )
 from .permissions import HasPermission, IsOwner
-from .utils import log_user_activity
-
+from .utils import log_user_activity 
 
 class UserInfoView(APIView):
     authentication_classes = [JWTAuthentication, OAuth2Authentication]
@@ -160,21 +162,13 @@ class TrustedDeviceViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        user = self.request.user
-        if user.is_staff:
-            return TrustedDevice.objects.all()
-        return TrustedDevice.objects.filter(user=user)
+        return TrustedDevice.objects.filter(user=self.request.user)
 
-    def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
-            permission_classes = [IsAuthenticated]
-        else:
-            permission_classes = [IsAuthenticated, IsOwner]
-        return [permission() for permission in permission_classes]
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
-
+    @action(detail=False, methods=['delete'], url_path='revoke-all')
+    def revoke_all(self, request):
+        self.get_queryset().delete()
+        return Response(status=204)
+    
 
 class SignupView(APIView):
     permission_classes = [AllowAny]
@@ -183,16 +177,14 @@ class SignupView(APIView):
         serializer = UserRegistrationSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
-            user_data = UserSerializer(user).data
             refresh = RefreshToken.for_user(user)
             return Response({
-                'user': user_data,
-                'refresh': str(refresh),
+                'user': UserSerializer(user).data,
                 'access': str(refresh.access_token),
+                'refresh': str(refresh),
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
+        
 class LoginView(APIView):
     permission_classes = [AllowAny]
 
@@ -200,31 +192,58 @@ class LoginView(APIView):
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.validated_data['user']
-            log_user_activity(
-                user, 'login_attempt',
-                f"Connexion initiée depuis {request.META.get('REMOTE_ADDR', 'inconnue')}",
-                request
-            )
-            if user.mfa_enabled:
-                mfa_token = RefreshToken.for_user(user)
-                mfa_token.access_token.set_exp(lifetime=timedelta(minutes=5))
-                mfa_methods = MFAMethod.objects.filter(user=user, is_active=True).values_list('method_type', flat=True)
-                return Response({
-                    'mfa_required': True,
-                    'mfa_methods': list(mfa_methods),
-                    'mfa_token': str(mfa_token.access_token)
-                }, status=status.HTTP_200_OK)
-            else:
+            
+            # Get device fingerprint from request headers (client must send)
+            fingerprint = request.headers.get('X-Device-Fingerprint')
+            trusted_device = None
+            if fingerprint:
+                try:
+                    trusted_device = TrustedDevice.objects.get(
+                        user=user,
+                        device_fingerprint=fingerprint,
+                        expires_at__gt=timezone.now()
+                    )
+                except TrustedDevice.DoesNotExist:
+                    pass
+            
+            # If trusted device found and still valid, skip MFA
+            if trusted_device:
+                # Update last_used
+                trusted_device.last_used = timezone.now()
+                trusted_device.save()
                 refresh = RefreshToken.for_user(user)
-                log_user_activity(user, 'login_success', f"Connexion réussie depuis {request.META.get('REMOTE_ADDR', 'inconnue')}", request)
                 user_data = UserSerializer(user).data
                 return Response({
                     'access': str(refresh.access_token),
                     'refresh': str(refresh),
                     'user': user_data,
-                }, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+                    'trusted_device': True
+                })
+            
+            # Otherwise, proceed with normal MFA flow
+            log_user_activity(user, 'login_attempt', f"Login from {request.META.get('REMOTE_ADDR')}", request)
+            
+            if user.mfa_enabled:
+                refresh = RefreshToken.for_user(user)
+                access_token = refresh.access_token
+                access_token['mfa'] = True                   # add claim
+                access_token.set_exp(lifetime=timedelta(minutes=5))
+                mfa_methods = MFAMethod.objects.filter(user=user, is_active=True).values_list('method_type', flat=True)
+                return Response({
+                    'mfa_required': True,
+                    'mfa_methods': list(mfa_methods),
+                    'mfa_token': str(access_token)          # return access token
+                }) 
+            else:
+                refresh = RefreshToken.for_user(user)
+                user_data = UserSerializer(user).data
+                return Response({
+                    'access': str(refresh.access_token),
+                    'refresh': str(refresh),
+                    'user': user_data,
+                })
+        return Response(serializer.errors, status=400)
+    
 
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
@@ -344,26 +363,50 @@ class MFAVerifyView(APIView):
         mfa_token_str = request.data.get('mfa_token')
         code = request.data.get('code')
         method = request.data.get('method')
+        trust_device = request.data.get('trust_device', False)  # new
+        device_name = request.data.get('device_name', 'Unknown Device')
+        
         if not mfa_token_str or not code or not method:
-            return Response({'detail': 'mfa_token, code et method requis.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'mfa_token, code et method requis.'}, status=400)
+        
         try:
             mfa_token = AccessToken(mfa_token_str)
             if not mfa_token.get('mfa', False):
-                return Response({'detail': 'Token MFA invalide.'}, status=status.HTTP_401_UNAUTHORIZED)
+                return Response({'detail': 'Token MFA invalide.'}, status=401)
             user_id = mfa_token['user_id']
             user = User.objects.get(id=user_id)
         except (TokenError, User.DoesNotExist):
-            return Response({'detail': 'Token MFA invalide ou expiré.'}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response({'detail': 'Token MFA invalide ou expiré.'}, status=401)
+        
+        # Verify code (TOTP or other)
+        # ... (existing verification logic) ...
         if method == 'totp':
             try:
                 mfa_method = MFAMethod.objects.get(user=user, method_type='totp', is_active=True)
             except MFAMethod.DoesNotExist:
-                return Response({'detail': 'Méthode TOTP non active.'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'detail': 'Méthode TOTP non active.'}, status=400)
             totp = pyotp.TOTP(mfa_method.secret)
             if not totp.verify(code, valid_window=1):
-                return Response({'detail': 'Code invalide.'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'detail': 'Code invalide.'}, status=400)
         else:
-            return Response({'detail': 'Méthode non supportée.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'Méthode non supportée.'}, status=400)
+        
+        # If trust_device is requested, create/update trusted device
+        fingerprint = request.headers.get('X-Device-Fingerprint')
+        if trust_device and fingerprint:
+            # Generate fingerprint if not provided (simplified: use user-agent + IP? 
+            # Better: client generates a persistent random ID)
+            expires_at = timezone.now() + timedelta(days=30)  # 30 days trust
+            TrustedDevice.objects.update_or_create(
+                user=user,
+                device_fingerprint=fingerprint,
+                defaults={
+                    'device_name': device_name,
+                    'expires_at': expires_at,
+                    'last_used': timezone.now()
+                }
+            )
+        
         refresh = RefreshToken.for_user(user)
         return Response({
             'access': str(refresh.access_token),

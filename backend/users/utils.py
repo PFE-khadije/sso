@@ -2,20 +2,18 @@ import random
 import json
 import base64
 import redis
+import secrets
+from django.urls import reverse
+
 import requests
 from django.conf import settings
 from django.core.mail import send_mail
 from django.core.exceptions import ImproperlyConfigured
 from cryptography.fernet import Fernet
 from users.models import UserActivity
-
+from django.utils import timezone
 # ── Redis connection ──────────────────────────────────────────────────────────
-redis_client = redis.Redis(
-    host=settings.REDIS_HOST,
-    port=settings.REDIS_PORT,
-    decode_responses=True
-)
-
+redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
 # ── OTP functions ────────────────────────────────────────────────────────────
 def generate_otp(length=6):
     """Génère un code OTP numérique."""
@@ -32,6 +30,8 @@ def verify_otp(key, otp):
         redis_client.delete(key)
         return True
     return False
+
+
 
 def send_email_otp(email, otp):
     """Envoie un OTP par email."""

@@ -54,6 +54,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     biometric_enabled = models.BooleanField(default=False)
     roles = models.ManyToManyField(Role, through='UserRole', blank=True) 
     mfa_enabled = models.BooleanField(default=False)
+    
 
     objects = UserManager()
 

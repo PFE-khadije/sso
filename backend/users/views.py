@@ -30,7 +30,7 @@ class OIDCUserInfoView(APIView):
     Custom OpenID Connect userinfo endpoint that returns full user claims.
     Uses OAuth2 authentication (valid access token required).
     """
-      authentication_classes = [OAuth2Authentication]
+    authentication_classes = [OAuth2Authentication]
     permission_classes = [IsAuthenticated]
 
     def get(self, request):

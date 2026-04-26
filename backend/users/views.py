@@ -30,23 +30,41 @@ class OIDCUserInfoView(APIView):
     Custom OpenID Connect userinfo endpoint that returns full user claims.
     Uses OAuth2 authentication (valid access token required).
     """
-    authentication_classes = [OAuth2Authentication]
+      authentication_classes = [OAuth2Authentication]
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user = request.user
-        data = {
-            "sub": str(user.id),
-            "email": user.email,
-            "email_verified": True,
-            "given_name": user.first_name or "",
-            "family_name": user.last_name or "",
-            "name": f"{user.first_name} {user.last_name}".strip(),
-            "preferred_username": user.email.split('@')[0] if user.email else "",
-            "phone_number": str(user.phone) if user.phone else None,
-            "phone_number_verified": False,
-        }
-        return Response(data)
+        token = request.auth  # OAuth2 access token instance
+        scopes = token.scope.split() if token and token.scope else []
+
+        # Always include the mandatory 'sub' claim
+        claims = {"sub": str(user.id)}
+
+        # Email scope
+        if "email" in scopes:
+            claims.update({
+                "email": user.email,
+                "email_verified": True,
+            })
+
+        # Profile scope
+        if "profile" in scopes:
+            claims.update({
+                "given_name": user.first_name or "",
+                "family_name": user.last_name or "",
+                "name": f"{user.first_name} {user.last_name}".strip(),
+                "preferred_username": user.email.split('@')[0] if user.email else "",
+            })
+
+        # Phone scope
+        if "phone" in scopes:
+            claims.update({
+                "phone_number": str(user.phone) if user.phone else None,
+                "phone_number_verified": False,
+            })
+
+        return Response(claims)
 
 class UserInfoView(APIView):
     authentication_classes = [JWTAuthentication, OAuth2Authentication]

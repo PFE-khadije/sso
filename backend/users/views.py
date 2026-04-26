@@ -25,14 +25,18 @@ from .serializers import (
 from .permissions import HasPermission, IsOwner
 from .utils import log_user_activity 
 
-class CustomUserInfoView(BaseUserInfoView):
-    def get(self, request, *args, **kwargs):
-        # Use the same authentication as the original
-        response = super().get(request, *args, **kwargs)
-        # Now enhance the data
+class OIDCUserInfoView(APIView):
+    """
+    Custom OpenID Connect userinfo endpoint that returns full user claims.
+    Uses OAuth2 authentication (valid access token required).
+    """
+    authentication_classes = [OAuth2Authentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
         user = request.user
-        data = response.data
-        data.update({
+        data = {
+            "sub": str(user.id),
             "email": user.email,
             "email_verified": True,
             "given_name": user.first_name or "",
@@ -41,9 +45,8 @@ class CustomUserInfoView(BaseUserInfoView):
             "preferred_username": user.email.split('@')[0] if user.email else "",
             "phone_number": str(user.phone) if user.phone else None,
             "phone_number_verified": False,
-        })
-        response.data = data
-        return response
+        }
+        return Response(data)
 
 class UserInfoView(APIView):
     authentication_classes = [JWTAuthentication, OAuth2Authentication]

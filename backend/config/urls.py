@@ -18,13 +18,13 @@ from django.contrib import admin
 from django.urls import path, include
 from oauth2_provider.views.oidc import ConnectDiscoveryInfoView
 from django.contrib.auth import views as auth_views
-from users.views import CustomUserInfoView
+from users.views import OIDCUserInfoView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('users.urls')),
     path('api/', include('clients.urls')),
-    path('o/userinfo/', CustomUserInfoView.as_view(), name='userinfo'),
+    path('o/userinfo/', OIDCUserInfoView.as_view(), name='userinfo'),
     path('o/', include('oauth2_provider.urls', namespace='oauth2_provider')),
     path('.well-known/openid-configuration', ConnectDiscoveryInfoView.as_view(), name='oidc-discovery'),
     path('accounts/login/', auth_views.LoginView.as_view(template_name='registration/login.html'), name='login'),

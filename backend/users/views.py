@@ -25,6 +25,7 @@ from .serializers import (
 from .permissions import HasPermission, IsOwner
 from .utils import log_user_activity 
 
+
 class UserInfoView(APIView):
     authentication_classes = [JWTAuthentication, OAuth2Authentication]
     permission_classes = [IsAuthenticated]

@@ -124,12 +124,11 @@ AUTH_PASSWORD_VALIDATORS = [
 # OAuth2 + OpenID Connect
 
 def oidc_claims_provider(user, scopes, claims):
-    print("=" * 50)
-    print("OIDC claims provider called")
-    print(f"User: {user.email} (id={user.id}) {user.phone_number}")
-    print(f"Scopes: {scopes}")
-    print(f"Initial claims: {claims}")
-    
+    import sys
+    print(">>> OIDC claims provider called", file=sys.stderr)
+    print(f"    User: {user.email} (id={user.id})", file=sys.stderr)
+    print(f"    Scopes: {scopes}", file=sys.stderr)
+    # forced claims
     claims['sub'] = str(user.id)
     claims['email'] = user.email
     claims['email_verified'] = True
@@ -139,8 +138,7 @@ def oidc_claims_provider(user, scopes, claims):
     claims['preferred_username'] = user.email.split('@')[0] if user.email else ''
     claims['phone_number'] = str(user.phone) if user.phone else None
     claims['phone_number_verified'] = False
-    
-    print(f"Final claims: {claims}")
+    print(f"    Final claims: {claims}", file=sys.stderr)
     return claims
 
 OAUTH2_PROVIDER = {

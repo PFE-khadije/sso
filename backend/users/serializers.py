@@ -72,17 +72,20 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
 # --- Login Serializer ---
 class LoginSerializer(serializers.Serializer):
-    identifier = serializers.CharField()
+    identifier = serializers.CharField(required=False, allow_blank=True)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    phone = serializers.CharField(required=False, allow_blank=True)
     password = serializers.CharField(write_only=True, style={'input_type': 'password'})
 
     def validate(self, attrs):
-        identifier = attrs.get('identifier')
+        # Prendre le premier identifiant non vide parmi identifier, email, phone
+        identifier = attrs.get('identifier') or attrs.get('email') or attrs.get('phone')
         password = attrs.get('password')
 
         if not identifier or not password:
             raise serializers.ValidationError('Identifiant et mot de passe requis.')
 
-        # Try to get user by email or phone
+        # Chercher l'utilisateur par email ou téléphone
         try:
             if '@' in identifier:
                 user = User.objects.get(email=identifier)
@@ -91,7 +94,7 @@ class LoginSerializer(serializers.Serializer):
         except User.DoesNotExist:
             raise serializers.ValidationError('Identifiants incorrects.')
 
-        # Authenticate with the user's email (username field) and password
+        # Authentifier avec l'email (username field) et le mot de passe
         user = authenticate(username=user.email, password=password)
         if not user:
             raise serializers.ValidationError('Identifiants incorrects.')

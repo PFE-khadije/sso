@@ -122,6 +122,26 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 # OAuth2 + OpenID Connect
+
+def oidc_claims_provider(user, scopes, claims):
+    claims['sub'] = str(user.id)
+    
+    if 'email' in scopes:
+        claims['email'] = user.email
+        claims['email_verified'] = True   # or user.email_verified if you have that field
+    
+    if 'profile' in scopes:
+        claims['given_name'] = user.first_name or ''
+        claims['family_name'] = user.last_name or ''
+        claims['name'] = f"{user.first_name} {user.last_name}".strip()
+        claims['preferred_username'] = user.email.split('@')[0] if user.email else ''
+    
+    if 'phone' in scopes:
+        claims['phone_number'] = str(user.phone) if user.phone else None
+        claims['phone_number_verified'] = False
+    
+    return claims
+
 OAUTH2_PROVIDER = {
     'SCOPES': {
         'read': 'Lire les informations de l’utilisateur',
@@ -139,6 +159,7 @@ OAUTH2_PROVIDER = {
     'ACCESS_TOKEN_EXPIRE_SECONDS': 3600,
     'REFRESH_TOKEN_EXPIRE_SECONDS': 86400 * 7,
     'PKCE_REQUIRED': False,
+    'OIDC_CLAIM_PROVIDER': oidc_claims_provider,
 }
 OAUTH2_PROVIDER_APPLICATION_MODEL = 'oauth2_provider.Application'
 

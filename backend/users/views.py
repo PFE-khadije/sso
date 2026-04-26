@@ -14,7 +14,7 @@ from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 from rest_framework_simplejwt.exceptions import TokenError
 from oauth2_provider.contrib.rest_framework import OAuth2Authentication
 from rest_framework_simplejwt.authentication import JWTAuthentication
-
+from oauth2_provider.views.oidc import UserInfoView as BaseUserInfoView
 from .models import User, Role, Permission, MFAMethod, BiometricProfile, TrustedDevice   
 from .serializers import (
     UserSerializer, RoleSerializer, PermissionSerializer,
@@ -25,6 +25,25 @@ from .serializers import (
 from .permissions import HasPermission, IsOwner
 from .utils import log_user_activity 
 
+class CustomUserInfoView(BaseUserInfoView):
+    def get(self, request, *args, **kwargs):
+        # Use the same authentication as the original
+        response = super().get(request, *args, **kwargs)
+        # Now enhance the data
+        user = request.user
+        data = response.data
+        data.update({
+            "email": user.email,
+            "email_verified": True,
+            "given_name": user.first_name or "",
+            "family_name": user.last_name or "",
+            "name": f"{user.first_name} {user.last_name}".strip(),
+            "preferred_username": user.email.split('@')[0] if user.email else "",
+            "phone_number": str(user.phone) if user.phone else None,
+            "phone_number_verified": False,
+        })
+        response.data = data
+        return response
 
 class UserInfoView(APIView):
     authentication_classes = [JWTAuthentication, OAuth2Authentication]

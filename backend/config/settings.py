@@ -126,19 +126,15 @@ AUTH_PASSWORD_VALIDATORS = [
 def oidc_claims_provider(user, scopes, claims):
     claims['sub'] = str(user.id)
     
-    if 'email' in scopes:
-        claims['email'] = user.email
-        claims['email_verified'] = True   # or user.email_verified if you have that field
-    
-    if 'profile' in scopes:
-        claims['given_name'] = user.first_name or ''
-        claims['family_name'] = user.last_name or ''
-        claims['name'] = f"{user.first_name} {user.last_name}".strip()
-        claims['preferred_username'] = user.email.split('@')[0] if user.email else ''
-    
-    if 'phone' in scopes:
-        claims['phone_number'] = str(user.phone) if user.phone else None
-        claims['phone_number_verified'] = False
+    # Toujours ajouter ces claims, indépendamment des scopes
+    claims['email'] = user.email
+    claims['email_verified'] = True
+    claims['given_name'] = user.first_name or ''
+    claims['family_name'] = user.last_name or ''
+    claims['name'] = f"{user.first_name} {user.last_name}".strip()
+    claims['preferred_username'] = user.email.split('@')[0] if user.email else ''
+    claims['phone_number'] = str(user.phone) if user.phone else None
+    claims['phone_number_verified'] = False
     
     return claims
 

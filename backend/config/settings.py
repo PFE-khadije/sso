@@ -157,7 +157,7 @@ OAUTH2_PROVIDER = {
     'CLIENT_SECRET_GENERATOR_CLASS': 'oauth2_provider.generators.ClientSecretGenerator',
     'ACCESS_TOKEN_EXPIRE_SECONDS': 3600,
     'REFRESH_TOKEN_EXPIRE_SECONDS': 86400 * 7,
-    'PKCE_REQUIRED': True,
+    'PKCE_REQUIRED': FalseS,
     'OIDC_CLAIM_PROVIDER': oidc_claims_provider,
 }
 OAUTH2_PROVIDER_APPLICATION_MODEL = 'oauth2_provider.Application'

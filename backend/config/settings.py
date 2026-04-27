@@ -48,8 +48,8 @@ LOGGING = {
     'disable_existing_loggers': False,
     'handlers': {'console': {'class': 'logging.StreamHandler'}},
     'loggers': {
-        'oauth2_provider': {'handlers': ['console'], 'level': 'DEBUG'},
         'django.request': {'handlers': ['console'], 'level': 'DEBUG'},
+        'oauth2_provider': {'handlers': ['console'], 'level': 'DEBUG'},
     },
 }
 
@@ -150,14 +150,14 @@ OAUTH2_PROVIDER = {
         'email': 'Accès à l’email',
         'phone': 'Accès au téléphone',
     },
-    'OIDC_ENABLED': True,
+    'OIDC_ENABLED': False,
     'OIDC_ISS_ENDPOINT': os.getenv('OIDC_ISS_ENDPOINT', 'https://sso-backend-6b1e.onrender.com'),
     'OIDC_RSA_PRIVATE_KEY': os.getenv('OIDC_RSA_PRIVATE_KEY'),  
     'CLIENT_ID_GENERATOR_CLASS': 'oauth2_provider.generators.ClientIdGenerator',
     'CLIENT_SECRET_GENERATOR_CLASS': 'oauth2_provider.generators.ClientSecretGenerator',
     'ACCESS_TOKEN_EXPIRE_SECONDS': 3600,
     'REFRESH_TOKEN_EXPIRE_SECONDS': 86400 * 7,
-    'PKCE_REQUIRED': False,
+    'PKCE_REQUIRED': True,
     'OIDC_CLAIM_PROVIDER': oidc_claims_provider,
 }
 OAUTH2_PROVIDER_APPLICATION_MODEL = 'oauth2_provider.Application'
@@ -168,7 +168,8 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Redis (Upstash)

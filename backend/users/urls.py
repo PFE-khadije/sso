@@ -8,6 +8,7 @@ from .views import (
 from .views_dashboard import UserAuthorizedAppsView, UserRevokeAppView, UserActivityView ,UserDevicesView, UserDeviceDetailView 
 from rest_framework_simplejwt.views import TokenRefreshView
 from .views_biometric import BiometricEnrollView, BiometricLoginView,BiometricStatusView, BiometricDeleteView
+from .views_identity import IdentityDocumentUploadView, IdentityDocumentStatusView
 from clients.views import UserHasClientView
 router = DefaultRouter()
 router.register(r'users', UserViewSet)
@@ -40,7 +41,6 @@ urlpatterns = [
     path('biometric/delete/', BiometricDeleteView.as_view(), name='biometric-delete'),
     path('user/has-client/', UserHasClientView.as_view(), name='user-has-client'),
     path('user/auth-methods/', UserAuthMethodsView.as_view(), name='auth-methods'),
-    
-
-    
+    path('identity/upload/', IdentityDocumentUploadView.as_view(), name='identity-upload'),
+    path('identity/status/', IdentityDocumentStatusView.as_view(), name='identity-status'),
 ]

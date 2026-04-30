@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 import pyotp
-from .models import User, Role, Permission, MFAMethod, BiometricProfile, TrustedDevice, UserActivity
+from .models import User, Role, Permission, MFAMethod, BiometricProfile, TrustedDevice, UserActivity, IdentityDocument
 
 # --- User Serializer (with phone conversion) ---
 class UserSerializer(serializers.ModelSerializer):
@@ -123,3 +123,16 @@ class TOTPDisableSerializer(serializers.Serializer):
         if not user.check_password(value):
             raise serializers.ValidationError("Mot de passe incorrect.")
         return value
+
+
+class IdentityDocumentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IdentityDocument
+        fields = ['id', 'document_type', 'front_image', 'back_image', 'selfie_image', 'status', 'rejection_reason', 'created_at']
+        read_only_fields = ['status', 'rejection_reason', 'created_at']
+
+    def validate(self, attrs):
+        doc_type = attrs.get('document_type')
+        if doc_type == 'id_card' and not attrs.get('back_image'):
+            raise serializers.ValidationError({'back_image': 'Back image is required for ID card.'})
+        return attrs

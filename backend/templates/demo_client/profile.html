@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ShopApp — Mon compte</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{min-height:100vh;background:#F0F3FF;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+  nav{background:white;padding:16px 32px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 1px 0 #E8EAF6}
+  .nav-brand{font-size:20px;font-weight:800;color:#1A1D2E}
+  .nav-brand span{color:#FF6B6B}
+  .logout-btn{padding:8px 16px;border-radius:10px;border:2px solid #E0E4FF;background:transparent;color:#5A6080;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none}
+  .logout-btn:hover{background:#F0F3FF}
+  main{max-width:700px;margin:40px auto;padding:0 24px}
+  .success-banner{background:rgba(0,212,170,.1);border:1px solid rgba(0,212,170,.3);border-radius:16px;padding:16px 20px;display:flex;align-items:center;gap:12px;margin-bottom:28px;color:#007a5e;font-size:14px;font-weight:600}
+  .card{background:white;border-radius:20px;padding:28px;box-shadow:0 2px 20px rgba(0,0,0,.05);margin-bottom:20px}
+  .card-title{font-size:12px;font-weight:700;color:#8B92B2;letter-spacing:.8px;text-transform:uppercase;margin-bottom:18px}
+  .avatar{width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,#4F6AF5,#7B5EA7);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800;color:white;margin-bottom:14px}
+  .user-name{font-size:22px;font-weight:800;color:#1A1D2E;margin-bottom:4px}
+  .user-email{font-size:14px;color:#8B92B2;margin-bottom:20px}
+  .info-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid #F0F2FF}
+  .info-row:last-child{border-bottom:none}
+  .info-label{font-size:13px;color:#8B92B2}
+  .info-value{font-size:14px;font-weight:600;color:#1A1D2E}
+  .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700}
+  .badge-green{background:rgba(0,212,170,.12);color:#00856b}
+  .badge-yellow{background:rgba(255,179,0,.12);color:#a07000}
+  .badge-red{background:rgba(239,83,80,.12);color:#b71c1c}
+  .badge-gray{background:#F0F2FF;color:#8B92B2}
+  .token-box{background:#F0F3FF;border-radius:12px;padding:14px;font-family:monospace;font-size:11px;color:#5A6080;word-break:break-all;margin-top:12px}
+  .powered{text-align:center;margin-top:32px;font-size:12px;color:#9099C0}
+  .powered a{color:#4F6AF5;text-decoration:none;font-weight:600}
+</style>
+</head>
+<body>
+<nav>
+  <div class="nav-brand">Shop<span>App</span> <span style="font-size:12px;color:#8B92B2;font-weight:400">via NovaGard SSO</span></div>
+  <a class="logout-btn" href="/demo/logout/">Déconnecter</a>
+</nav>
+<main>
+  <div class="success-banner">
+    ✅ &nbsp;Authentification réussie via NovaGard SSO
+  </div>
+
+  <div class="card">
+    <div class="card-title">Profil utilisateur</div>
+    {% with name=user.name|default:user.email %}
+    <div class="avatar">{{ name|slice:":1"|upper }}{{ name|slice:"1:"|cut:" "|slice:":1"|upper }}</div>
+    <div class="user-name">{{ user.name|default:"—" }}</div>
+    <div class="user-email">{{ user.email|default:"—" }}</div>
+    {% endwith %}
+    <div class="info-row">
+      <span class="info-label">Email</span>
+      <span class="info-value">{{ user.email|default:"—" }}</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Identité vérifiée</span>
+      <span>
+        {% if user.identity_verified %}
+          <span class="badge badge-green">✓ Vérifié</span>
+        {% else %}
+          <span class="badge badge-yellow">En attente</span>
+        {% endif %}
+      </span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Scopes accordés</span>
+      <span class="info-value">{{ scopes }}</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Jeton d'accès (Access Token)</div>
+    <div class="token-box">{{ access_token }}</div>
+  </div>
+
+  <div class="powered">
+    Authentifié avec <a href="http://localhost:8000">NovaGard SSO</a> — Identité numérique sécurisée
+  </div>
+</main>
+</body>
+</html>

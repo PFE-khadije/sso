@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Setup needed</title>
+<style>
+  body{min-height:100vh;background:#F0F3FF;display:flex;align-items:center;justify-content:center;font-family:-apple-system,sans-serif}
+  .card{background:white;border-radius:20px;padding:40px;max-width:480px;width:100%;box-shadow:0 2px 20px rgba(0,0,0,.06)}
+  h1{font-size:20px;font-weight:800;color:#1A1D2E;margin-bottom:12px}
+  p{font-size:14px;color:#5A6080;margin-bottom:16px;line-height:1.6}
+  code{background:#F0F3FF;padding:12px 16px;border-radius:10px;display:block;font-family:monospace;font-size:13px;color:#4F6AF5}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>⚙️ Setup requis</h1>
+  <p>L'application de démonstration OAuth2 n'est pas encore créée dans la base de données. Exécutez cette commande :</p>
+  <code>docker-compose exec backend python manage.py setup_demo_app</code>
+  <p style="margin-top:16px">Puis rechargez cette page.</p>
+</div>
+</body>
+</html>

@@ -3,6 +3,9 @@ import json
 import base64
 import redis
 import secrets
+import math
+import datetime
+from difflib import SequenceMatcher
 from django.urls import reverse
 
 import requests
@@ -12,6 +15,8 @@ from django.core.exceptions import ImproperlyConfigured
 from cryptography.fernet import Fernet
 from users.models import UserActivity
 from django.utils import timezone
+from .models import PasswordResetToken
+
 # ── Redis connection ──────────────────────────────────────────────────────────
 redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
 # ── OTP functions ────────────────────────────────────────────────────────────
@@ -32,6 +37,17 @@ def verify_otp(key, otp):
     return False
 
 
+def generate_password_reset_token(user):
+    token = secrets.token_urlsafe(32)
+    PasswordResetToken.objects.create(user=user, token=token)
+    return token
+
+def send_password_reset_email(user, request):
+    token = generate_password_reset_token(user)
+    reset_url = request.build_absolute_uri(f'/api/password-reset/confirm/?token={token}')
+    subject = "Password Reset Request"
+    message = f"Click the link to reset your password: {reset_url}\nThis link expires in 1 hour."
+    send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user.email])
 
 def send_email_otp(email, otp):
     """Envoie un OTP par email."""
@@ -67,6 +83,20 @@ AI_SERVICE_URL = getattr(settings, 'AI_SERVICE_URL', None)
 if not AI_SERVICE_URL:
     raise ImproperlyConfigured("AI_SERVICE_URL must be defined in settings (e.g., 'http://localhost:5001')")
 
+AI_SERVICE_KEY = getattr(settings, 'AI_SERVICE_KEY', None)
+
+def _ai_headers():
+    """Returns auth headers for the AI microservice."""
+    return {'X-API-Key': AI_SERVICE_KEY} if AI_SERVICE_KEY else {}
+
+def _ai_error(response):
+    """Extracts a human-readable error from an AI service error response."""
+    try:
+        body = response.json()
+        return body.get('error') or body.get('detail') or body.get('message') or f"Service IA: HTTP {response.status_code}"
+    except Exception:
+        return f"Service IA indisponible (HTTP {response.status_code})"
+
 class AIServiceError(Exception):
     pass
 
@@ -82,73 +112,68 @@ def detect_face(image_bytes):
     """Détecte le plus grand visage dans une image."""
     files = {'image': ('image.jpg', image_bytes, 'image/jpeg')}
     try:
-        response = requests.post(f"{AI_SERVICE_URL}/detect", files=files, timeout=10)
-        response.raise_for_status()
-        return response.json()
+        response = requests.post(f"{AI_SERVICE_URL}/detect", files=files, headers=_ai_headers(), timeout=10)
+        if response.ok:
+            return response.json()
+        return {'error': _ai_error(response)}
+    except requests.exceptions.Timeout:
+        return {'error': 'Service IA: timeout'}
     except requests.RequestException as e:
-        return {'error': f"Erreur de connexion: {str(e)}"}
+        return {'error': f"Erreur réseau: {str(e)}"}
 
 def extract_embedding(image_bytes):
     """Extrait l'embedding du visage (512 dimensions)."""
     files = {'image': ('image.jpg', image_bytes, 'image/jpeg')}
     try:
-        response = requests.post(f"{AI_SERVICE_URL}/embed", files=files, timeout=10)
-        response.raise_for_status()
-        return response.json()
+        response = requests.post(f"{AI_SERVICE_URL}/embed", files=files, headers=_ai_headers(), timeout=30)
+        if response.ok:
+            return response.json()
+        return {'error': _ai_error(response)}
+    except requests.exceptions.Timeout:
+        return {'error': 'Le service de reconnaissance faciale est temporairement indisponible. Réessayez dans quelques secondes.'}
+    except requests.exceptions.ConnectionError:
+        return {'error': 'Impossible de joindre le service de reconnaissance faciale.'}
     except requests.RequestException as e:
-        return {'error': f"Erreur de connexion: {str(e)}"}
+        return {'error': f"Erreur réseau: {str(e)}"}
 
 def verify_face(image_bytes, reference_embedding):
     """Compare une image avec un embedding stocké."""
-    img_base64 = base64.b64encode(image_bytes).decode('utf-8')
-    payload = {
-        'image': img_base64,
-        'embedding': reference_embedding
-    }
+    payload = {'image': base64.b64encode(image_bytes).decode('utf-8'), 'embedding': reference_embedding}
     try:
-        response = requests.post(
-            f"{AI_SERVICE_URL}/verify",
-            json=payload,
-            headers={'Content-Type': 'application/json'},
-            timeout=10
-        )
-        response.raise_for_status()
-        return response.json()
+        response = requests.post(f"{AI_SERVICE_URL}/verify", json=payload, headers=_ai_headers(), timeout=15)
+        if response.ok:
+            return response.json()
+        return {'error': _ai_error(response)}
     except requests.RequestException as e:
-        return {'error': f"Erreur de connexion: {str(e)}"}
+        return {'error': f"Erreur réseau: {str(e)}"}
 
 def compare_two_faces(image_bytes1, image_bytes2):
     """Compare deux images et retourne la similarité."""
-    img1_base64 = base64.b64encode(image_bytes1).decode('utf-8')
-    img2_base64 = base64.b64encode(image_bytes2).decode('utf-8')
     payload = {
-        'image1': img1_base64,
-        'image2': img2_base64
+        'image1': base64.b64encode(image_bytes1).decode('utf-8'),
+        'image2': base64.b64encode(image_bytes2).decode('utf-8'),
     }
     try:
-        response = requests.post(
-            f"{AI_SERVICE_URL}/verify",
-            json=payload,
-            headers={'Content-Type': 'application/json'},
-            timeout=10
-        )
-        response.raise_for_status()
-        return response.json()
+        response = requests.post(f"{AI_SERVICE_URL}/verify", json=payload, headers=_ai_headers(), timeout=15)
+        if response.ok:
+            return response.json()
+        return {'error': _ai_error(response)}
     except requests.RequestException as e:
-        return {'error': f"Erreur de connexion: {str(e)}"}
+        return {'error': f"Erreur réseau: {str(e)}"}
 
 def verify_id_card(id_card_bytes, selfie_bytes):
     """Vérifie que le selfie correspond à la photo de la pièce d'identité."""
     files = {
         'id_card': ('id_card.jpg', id_card_bytes, 'image/jpeg'),
-        'selfie': ('selfie.jpg', selfie_bytes, 'image/jpeg')
+        'selfie': ('selfie.jpg', selfie_bytes, 'image/jpeg'),
     }
     try:
-        response = requests.post(f"{AI_SERVICE_URL}/verify-id", files=files, timeout=15)
-        response.raise_for_status()
-        return response.json()
+        response = requests.post(f"{AI_SERVICE_URL}/verify-id", files=files, headers=_ai_headers(), timeout=30)
+        if response.ok:
+            return response.json()
+        return {'error': _ai_error(response)}
     except requests.RequestException as e:
-        return {'error': f"Erreur de connexion: {str(e)}"}
+        return {'error': f"Erreur réseau: {str(e)}"}
 
 
 # ── Encryption utilities (Fernet) ────────────────────────────────────────────
@@ -200,3 +225,80 @@ def decrypt_json(encrypted_value):
     """Déchiffre et retourne un objet JSON."""
     decrypted_str = decrypt_value(encrypted_value)
     return json.loads(decrypted_str)
+
+
+# ── Face identification helpers ───────────────────────────────────────────────
+def cosine_sim(a, b):
+    """Pure-Python cosine similarity between two embedding lists."""
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = math.sqrt(sum(x * x for x in a))
+    norm_b = math.sqrt(sum(y * y for y in b))
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
+def check_liveness(image_bytes):
+    """Calls /liveness AI endpoint. Returns {'live': bool, 'score': float} or {'error': str}.
+    If the service is unreachable, returns {'error': ...} so callers can degrade gracefully."""
+    files = {'image': ('image.jpg', image_bytes, 'image/jpeg')}
+    try:
+        response = requests.post(f"{AI_SERVICE_URL}/liveness", files=files, headers=_ai_headers(), timeout=15)
+        if response.ok:
+            return response.json()
+        return {'error': _ai_error(response)}
+    except requests.exceptions.Timeout:
+        return {'error': 'Service IA: timeout'}
+    except requests.RequestException as e:
+        return {'error': f"Erreur réseau: {str(e)}"}
+
+
+# ── OCR helpers ───────────────────────────────────────────────────────────────
+def extract_card_text(image_bytes):
+    """Extracts text from an ID card image using pytesseract.
+    Returns empty string if pytesseract/tesseract is not available."""
+    try:
+        import pytesseract
+        from PIL import Image
+        import io
+        img = Image.open(io.BytesIO(image_bytes))
+        return pytesseract.image_to_string(img, lang='fra+ara+eng')
+    except Exception:
+        return ''
+
+
+def compare_names(registered_name, ocr_text, threshold=0.65):
+    """Checks whether registered_name appears (fuzzy) in OCR text.
+    Returns True if found, False if clearly absent, None if text is too short to judge."""
+    if not registered_name or not ocr_text:
+        return None
+    if len(ocr_text.strip()) < 20:
+        return None
+    name = registered_name.lower().strip()
+    text = ocr_text.lower()
+    if name in text:
+        return True
+    n = len(name)
+    for i in range(len(text) - n + 1):
+        if SequenceMatcher(None, name, text[i:i + n]).ratio() >= threshold:
+            return True
+    return False
+
+
+# ── Device auto-registration ──────────────────────────────────────────────────
+def auto_register_device(user, request):
+    """Creates or updates a TrustedDevice after any successful authentication."""
+    from .models import TrustedDevice
+    fingerprint = request.META.get('HTTP_X_DEVICE_FINGERPRINT')
+    if not fingerprint:
+        return
+    device_name = request.META.get('HTTP_X_DEVICE_NAME', 'Mobile Device')
+    expires_at = timezone.now() + datetime.timedelta(days=30)
+    TrustedDevice.objects.update_or_create(
+        device_fingerprint=fingerprint,
+        defaults={
+            'user': user,
+            'device_name': device_name,
+            'expires_at': expires_at,
+        },
+    )

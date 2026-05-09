@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Erreur — Demo OAuth2</title>
+<style>
+  body{min-height:100vh;background:#F0F3FF;display:flex;align-items:center;justify-content:center;font-family:-apple-system,sans-serif}
+  .card{background:white;border-radius:20px;padding:40px;max-width:420px;width:100%;text-align:center;box-shadow:0 2px 20px rgba(0,0,0,.06)}
+  .icon{font-size:48px;margin-bottom:16px}
+  h1{font-size:22px;font-weight:800;color:#1A1D2E;margin-bottom:8px}
+  p{font-size:14px;color:#8B92B2;margin-bottom:24px}
+  a{padding:14px 28px;border-radius:14px;background:linear-gradient(135deg,#4F6AF5,#7B5EA7);color:white;font-weight:700;text-decoration:none;font-size:15px}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">⚠️</div>
+  <h1>{{ error }}</h1>
+  <p>{{ description }}</p>
+  <a href="/demo/">Retour à la démo</a>
+</div>
+</body>
+</html>

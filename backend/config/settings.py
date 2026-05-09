@@ -32,8 +32,10 @@ INSTALLED_APPS = [
     'phonenumber_field',
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
+    'django_ratelimit',
     'users',
     'clients',
+    'demo_client',
 ]
 
 REST_FRAMEWORK = {
@@ -78,12 +80,25 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-
-]
 CORS_ALLOW_CREDENTIALS = True
+
+from corsheaders.defaults import default_headers
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    'x-device-fingerprint',
+    'x-device-name',
+]
+
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+else:
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:60792",
+        "http://localhost:50364",
+        "http://localhost:57574",
+        
+    ]
 
 ROOT_URLCONF = 'config.urls'
 
@@ -125,21 +140,25 @@ AUTH_PASSWORD_VALIDATORS = [
 # OAuth2 + OpenID Connect
 
 def oidc_claims_provider(user, scopes, claims):
-    import sys
-    print(">>> OIDC claims provider called", file=sys.stderr)
-    print(f"    User: {user.email} (id={user.id})", file=sys.stderr)
-    print(f"    Scopes: {scopes}", file=sys.stderr)
-    # forced claims
+    # 'sub' is mandatory in every ID token
     claims['sub'] = str(user.id)
-    claims['email'] = user.email
-    claims['email_verified'] = True
-    claims['given_name'] = user.first_name or ''
-    claims['family_name'] = user.last_name or ''
-    claims['name'] = f"{user.first_name} {user.last_name}".strip()
-    claims['preferred_username'] = user.email.split('@')[0] if user.email else ''
-    claims['phone_number'] = str(user.phone) if user.phone else None
-    claims['phone_number_verified'] = False
-    print(f"    Final claims: {claims}", file=sys.stderr)
+
+    scope_set = set(scopes) if scopes else set()
+
+    if 'email' in scope_set:
+        claims['email'] = user.email
+        claims['email_verified'] = True
+
+    if 'profile' in scope_set:
+        claims['given_name'] = user.first_name or ''
+        claims['family_name'] = user.last_name or ''
+        claims['name'] = f"{user.first_name} {user.last_name}".strip()
+        claims['preferred_username'] = user.email.split('@')[0] if user.email else ''
+
+    if 'phone' in scope_set:
+        claims['phone_number'] = str(user.phone) if user.phone else None
+        claims['phone_number_verified'] = False
+
     return claims
 
 OAUTH2_PROVIDER = {
@@ -151,14 +170,14 @@ OAUTH2_PROVIDER = {
         'email': 'Accès à l’email',
         'phone': 'Accès au téléphone',
     },
-    'OIDC_ENABLED': False,
+    'OIDC_ENABLED': True,
     'OIDC_ISS_ENDPOINT': os.getenv('OIDC_ISS_ENDPOINT', 'https://sso-backend-6b1e.onrender.com'),
     'OIDC_RSA_PRIVATE_KEY': os.getenv('OIDC_RSA_PRIVATE_KEY'),  
     'CLIENT_ID_GENERATOR_CLASS': 'oauth2_provider.generators.ClientIdGenerator',
     'CLIENT_SECRET_GENERATOR_CLASS': 'oauth2_provider.generators.ClientSecretGenerator',
     'ACCESS_TOKEN_EXPIRE_SECONDS': 3600,
     'REFRESH_TOKEN_EXPIRE_SECONDS': 86400 * 7,
-    'PKCE_REQUIRED': False,
+    'PKCE_REQUIRED': True,
     'OIDC_CLAIM_PROVIDER': oidc_claims_provider,
 }
 OAUTH2_PROVIDER_APPLICATION_MODEL = 'oauth2_provider.Application'
@@ -171,33 +190,67 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+RATELIMIT_ENABLE = not DEBUG
 
 # Redis (Upstash)
 REDIS_URL = os.getenv('REDIS_URL')
 CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = REDIS_URL
 
+if REDIS_URL:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': REDIS_URL,
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                'IGNORE_EXCEPTIONS': True,
+            }
+        }
+    }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        }
+    }
+
 # Email (Brevo)
 if DEBUG:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 else:
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-    EMAIL_HOST = os.getenv('BREVO_HOST', 'smtp-relay.brevo.com')
-    EMAIL_PORT = int(os.getenv('BREVO_PORT', 587))
+    EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp-relay.brevo.com')
+    EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
     EMAIL_USE_TLS = True
     EMAIL_HOST_USER = os.getenv('BREVO_USER')
-    EMAIL_HOST_PASSWORD = os.getenv('BREVO_SMTP_KEY')
+    EMAIL_HOST_PASSWORD = os.getenv('BREVO_API_KEY')
     DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL')
 
 # Encryption
 ENCRYPTION_KEY = os.getenv('ENCRYPTION_KEY')
 if not ENCRYPTION_KEY and DEBUG:
     ENCRYPTION_KEY = Fernet.generate_key().decode()
-    print(f"⚠️ ENCRYPTION_KEY générée automatiquement: {ENCRYPTION_KEY}")
+    import warnings
+    warnings.warn(
+        "ENCRYPTION_KEY not set — a temporary key was generated. "
+        "Data encrypted now cannot be decrypted after a restart. "
+        "Set ENCRYPTION_KEY in your .env file.",
+        stacklevel=2,
+    )
 
 # AI Service
 AI_SERVICE_URL = os.getenv('AI_SERVICE_URL', 'https://sso-ai-microservice.onrender.com')
+AI_SERVICE_KEY = os.getenv('AI_SERVICE_KEY', None)
+
+# Firebase / FCM
+# Download your service account key from Firebase console → Project settings → Service accounts
+# Set FIREBASE_CREDENTIALS_PATH to the absolute path of the JSON file inside the container
+FIREBASE_CREDENTIALS_PATH = os.getenv('FIREBASE_CREDENTIALS_PATH', None)
 
 # CSRF & Security
 CSRF_TRUSTED_ORIGINS = [

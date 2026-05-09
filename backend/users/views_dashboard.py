@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from oauth2_provider.models import RefreshToken, AccessToken
 from django.utils import timezone
+from django.shortcuts import get_object_or_404
 from users.serializers import TrustedDeviceSerializer
 from users.serializers import UserActivitySerializer
 from users.models import TrustedDevice, UserActivity

@@ -1,0 +1,43 @@
+services:
+  #redis:
+   # image: redis:7
+    #container_name: redis_identite
+    #ports:
+     # - "6379:6379"
+    #restart: unless-stopped
+
+  backend:
+    build:
+      
+      context: .
+      dockerfile: Dockerfile
+    container_name: django_identite
+    dns:                    
+      - 8.8.8.8
+      - 1.1.1.1
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    environment:
+      # Django settings
+      - SECRET_KEY=${SECRET_KEY}
+      - DEBUG=${DEBUG}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
+      
+      # ---- Suppression des variables individuelles DB_* ----
+      # On utilise uniquement DATABASE_URL pour la connexion Supabase
+      - DATABASE_URL=${DATABASE_URL}      
+      
+      # Redis
+      - REDIS_URL=${REDIS_URL}   
+      
+      # Encryption
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      
+      # Email
+      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-noreply@example.com}
+        
+    restart: unless-stopped
+

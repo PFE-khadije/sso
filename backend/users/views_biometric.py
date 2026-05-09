@@ -10,7 +10,8 @@ from django.shortcuts import get_object_or_404
 from .models import User, BiometricProfile
 from .utils import (
     encrypt_value, decrypt_value, log_user_activity,
-    extract_embedding, verify_face
+    extract_embedding, verify_face,
+    cosine_sim, check_liveness, auto_register_device,
 )
 
 logger = logging.getLogger(__name__)
@@ -105,6 +106,16 @@ class BiometricLoginView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED
             )
 
+        image_bytes = image_file.read()
+
+        # Liveness check — only reject on explicit False; ignore service errors
+        liveness = check_liveness(image_bytes)
+        if 'error' not in liveness and not liveness.get('live', True):
+            return Response(
+                {'error': 'Liveness check échoué. Regardez directement la caméra et réessayez.'},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
         # Check biometric profile
         try:
             profile = user.biometric_profile
@@ -125,7 +136,7 @@ class BiometricLoginView(APIView):
             )
 
         # Verify face
-        result = verify_face(image_file.read(), stored_embedding)
+        result = verify_face(image_bytes, stored_embedding)
         if 'error' in result:
             return Response(
                 {'error': result['error']},
@@ -137,6 +148,7 @@ class BiometricLoginView(APIView):
 
         if verified:
             refresh = RefreshToken.for_user(user)
+            auto_register_device(user, request)
             log_user_activity(user, 'biometric_login_success', f"Connexion biométrique réussie (similarité: {similarity:.2f})", request)
             return Response({
                 'access': str(refresh.access_token),
@@ -188,14 +200,86 @@ class BiometricDeleteView(APIView):
             profile.delete()
             request.user.biometric_enabled = False
             request.user.save(update_fields=['biometric_enabled'])
-            
+
             log_user_activity(
                 request.user,
                 'biometric_delete',
                 "Suppression du profil biométrique",
                 request
             )
-            
+
             return Response({'message': 'Profil biométrique supprimé'})
         except BiometricProfile.DoesNotExist:
             return Response({'error': 'Aucun profil trouvé'}, status=status.HTTP_404_NOT_FOUND)
+
+
+class BiometricIdentifyView(APIView):
+    """1-to-N face identification — no identifier required.
+    Searches all enrolled users by cosine similarity."""
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
+    THRESHOLD = 0.65
+
+    def post(self, request):
+        image_file = request.FILES.get('image')
+        if not image_file:
+            return Response({'error': 'Image requise'}, status=status.HTTP_400_BAD_REQUEST)
+
+        image_bytes = image_file.read()
+
+        # Liveness check
+        liveness = check_liveness(image_bytes)
+        if 'error' not in liveness and not liveness.get('live', True):
+            return Response(
+                {'error': 'Liveness check échoué. Regardez directement la caméra et réessayez.'},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        # Extract embedding from the query image
+        emb_result = extract_embedding(image_bytes)
+        if 'error' in emb_result:
+            return Response({'error': emb_result['error']}, status=status.HTTP_400_BAD_REQUEST)
+        query_emb = emb_result.get('embedding')
+        if not query_emb:
+            return Response({'error': "Impossible d'extraire l'embedding"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Search all enrolled users
+        best_user = None
+        best_sim = 0.0
+        for profile in BiometricProfile.objects.select_related('user').all():
+            try:
+                stored_emb = json.loads(decrypt_value(profile.encrypted_embedding))
+                sim = cosine_sim(query_emb, stored_emb)
+                if sim > best_sim:
+                    best_sim = sim
+                    best_user = profile.user
+            except Exception:
+                continue
+
+        if best_user and best_sim >= self.THRESHOLD:
+            refresh = RefreshToken.for_user(best_user)
+            auto_register_device(best_user, request)
+            log_user_activity(
+                best_user,
+                'identify_login_success',
+                f"Identification faciale 1-to-N réussie (sim: {best_sim:.2f})",
+                request,
+            )
+            return Response({
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+                'user': {
+                    'id': best_user.id,
+                    'email': best_user.email,
+                    'phone': str(best_user.phone) if best_user.phone else None,
+                    'first_name': best_user.first_name,
+                    'last_name': best_user.last_name,
+                },
+                'similarity': best_sim,
+            })
+
+        return Response(
+            {'error': 'Visage non reconnu. Assurez-vous d\'être bien enrôlé.'},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )

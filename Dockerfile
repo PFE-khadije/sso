@@ -9,6 +9,9 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     gcc \
     libpq-dev \
+    tesseract-ocr \
+    tesseract-ocr-fra \
+    tesseract-ocr-ara \
     && rm -rf /var/lib/apt/lists/*
 
 # Copier et installer les dépendances Python

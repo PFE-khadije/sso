@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ShopApp — Demo OAuth2 Client</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{min-height:100vh;background:#F0F3FF;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+  .page{display:flex;gap:48px;align-items:center;max-width:900px;width:100%;padding:40px 24px}
+  .app-side{flex:1}
+  .app-logo{width:64px;height:64px;border-radius:18px;background:linear-gradient(135deg,#FF6B6B,#FF8E53);display:flex;align-items:center;justify-content:center;font-size:32px;margin-bottom:20px;box-shadow:0 8px 24px rgba(255,107,107,.3)}
+  .app-name{font-size:13px;font-weight:700;color:#8B92B2;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px}
+  h1{font-size:36px;font-weight:800;color:#1A1D2E;line-height:1.2;margin-bottom:14px}
+  .desc{font-size:15px;color:#5A6080;line-height:1.6;margin-bottom:32px}
+  .features{display:flex;flex-direction:column;gap:10px;margin-bottom:36px}
+  .feat{display:flex;align-items:center;gap:10px;font-size:14px;color:#5A6080}
+  .feat-dot{width:8px;height:8px;border-radius:50%;background:#4F6AF5;flex-shrink:0}
+  .sso-card{background:white;border-radius:24px;padding:36px;box-shadow:0 4px 40px rgba(0,0,0,.08);flex:1;max-width:380px}
+  .sso-header{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+  .sso-logo{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#4F6AF5,#7B5EA7);display:flex;align-items:center;justify-content:center}
+  .sso-logo svg{width:22px;height:22px;fill:white}
+  .sso-name{font-size:18px;font-weight:800;color:#1A1D2E}
+  .sso-sub{font-size:13px;color:#8B92B2;margin-bottom:28px}
+  .divider{height:1px;background:#E8EAF6;margin:20px 0}
+  .scope-list{margin-bottom:28px}
+  .scope-item{display:flex;align-items:center;gap:10px;padding:10px 0;font-size:13px;color:#5A6080;border-bottom:1px solid #F0F2FF}
+  .scope-item:last-child{border-bottom:none}
+  .scope-icon{width:32px;height:32px;border-radius:8px;background:#EEF1FF;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px}
+  .login-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:16px;border-radius:16px;border:none;background:linear-gradient(135deg,#4F6AF5,#7B5EA7);color:white;font-size:16px;font-weight:700;cursor:pointer;text-decoration:none;box-shadow:0 8px 20px rgba(79,106,245,.35);transition:opacity .2s;margin-bottom:12px}
+  .login-btn:hover{opacity:.9}
+  .login-btn svg{width:20px;height:20px;fill:white}
+  .signup-btn{display:block;text-align:center;width:100%;padding:14px;border-radius:16px;border:2px solid #E0E4FF;background:transparent;color:#4F6AF5;font-size:15px;font-weight:600;cursor:pointer;text-decoration:none;transition:background .2s}
+  .signup-btn:hover{background:#F0F3FF}
+  .note{margin-top:16px;text-align:center;font-size:11px;color:#9099C0}
+  @media(max-width:700px){.page{flex-direction:column}.app-side{text-align:center}.feat{justify-content:center}}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="app-side">
+    <div class="app-logo">🛍️</div>
+    <div class="app-name">Demo App</div>
+    <h1>La meilleure boutique en ligne</h1>
+    <p class="desc">Connectez-vous avec votre identité vérifiée NovaGard pour accéder à votre compte sécurisé.</p>
+    <div class="features">
+      <div class="feat"><div class="feat-dot"></div>Identité vérifiée et sécurisée</div>
+      <div class="feat"><div class="feat-dot"></div>Authentification multi-facteurs</div>
+      <div class="feat"><div class="feat-dot"></div>Zéro mot de passe à retenir</div>
+    </div>
+  </div>
+
+  <div class="sso-card">
+    <div class="sso-header">
+      <div class="sso-logo"><svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg></div>
+      <div>
+        <div class="sso-name">NovaGard SSO</div>
+      </div>
+    </div>
+    <p class="sso-sub">Demo App souhaite accéder à votre compte NovaGard</p>
+
+    <div class="scope-list">
+      <div class="scope-item"><div class="scope-icon">👤</div>Votre nom et adresse email</div>
+      <div class="scope-item"><div class="scope-icon">✅</div>Statut de vérification d'identité</div>
+      <div class="scope-item"><div class="scope-icon">🔒</div>Informations de sécurité du compte</div>
+    </div>
+
+    <a class="login-btn" href="/o/authorize/?response_type=code&client_id={{ client_id }}&redirect_uri=http://localhost:8000/demo/callback/&scope=openid+read">
+      <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
+      Continuer avec NovaGard
+    </a>
+    <a class="signup-btn" href="/o/authorize/?response_type=code&client_id={{ client_id }}&redirect_uri=http://localhost:8000/demo/callback/&scope=openid+read&prompt=login">
+      Créer un compte NovaGard
+    </a>
+    <p class="note">En continuant, vous acceptez que Demo App accède aux données listées ci-dessus via NovaGard SSO.</p>
+  </div>
+</div>
+</body>
+</html>

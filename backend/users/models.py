@@ -1,11 +1,11 @@
+import uuid
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
-import pyotp
-from django.db import models
-from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
-import json
+from django.utils import timezone
 from django.utils.functional import cached_property
 from phonenumber_field.modelfields import PhoneNumberField
+import pyotp
+import json
 
 
 
@@ -116,6 +116,12 @@ class BiometricProfile(models.Model):
     def __str__(self):
         return f"Biometric profile for {self.user.email}"
 
+class PasswordResetToken(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    token = models.CharField(max_length=255, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    used = models.BooleanField(default=False)
+
 class TrustedDevice(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='trusted_devices')
     device_name = models.CharField(max_length=255)
@@ -136,7 +142,77 @@ class UserActivity(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ['-created_at']   
+        ordering = ['-created_at']
 
 
-        
+class IdentityDocument(models.Model):
+    DOCUMENT_TYPE_CHOICES = [
+        ('id_card', 'National ID Card'),
+        ('passport', 'Passport'),
+        ('driver_license', "Driver's License"),
+    ]
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('under_review', 'Under Review'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='identity_document')
+    document_type = models.CharField(max_length=20, choices=DOCUMENT_TYPE_CHOICES)
+    front_image = models.ImageField(upload_to='identity/front/')
+    back_image = models.ImageField(upload_to='identity/back/', null=True, blank=True)
+    selfie_image = models.ImageField(upload_to='identity/selfie/')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    rejection_reason = models.TextField(blank=True)
+    expiry_date = models.DateField(null=True, blank=True)
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.user.email} – {self.document_type} ({self.status})"
+
+
+class FCMToken(models.Model):
+    PLATFORM_CHOICES = [('android', 'Android'), ('ios', 'iOS')]
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='fcm_tokens')
+    token = models.TextField(unique=True)
+    platform = models.CharField(max_length=10, choices=PLATFORM_CHOICES, default='android')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.platform} token for {self.user.email}"
+
+
+class QRLoginToken(models.Model):
+    STATUS_CHOICES = [('pending', 'Pending'), ('confirmed', 'Confirmed'), ('expired', 'Expired')]
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    user = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='qr_tokens')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"QR {self.token} ({self.status})"
+
+
+class LoginLockout(models.Model):
+    identifier = models.CharField(max_length=255, unique=True)
+    attempts = models.PositiveIntegerField(default=0)
+    locked_until = models.DateTimeField(null=True, blank=True)
+    last_attempt = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Lockout {self.identifier} ({self.attempts} attempts)"
+
+    def is_locked(self):
+        return bool(self.locked_until and self.locked_until > timezone.now())
+
+    def remaining_seconds(self):
+        if self.locked_until and self.locked_until > timezone.now():
+            return int((self.locked_until - timezone.now()).total_seconds())
+        return 0

@@ -1,0 +1,10 @@
+{
+    "identifier": "test@example.com",
+    "client secret": "FJPo7a8IYf63a1N4JyxuxxNaJ7D7HRqoUK5Kqo0kIZKDXBEWNL657m7uO7RHd4a43g72P3caUpXeuNjwtetIRkRCfiPXCvlsNRLYn4BI1SdF10cUlIv1PF03sXnQDQHm",
+  "client id":"lQ3qHF3YmRViXXOIob6OfLEiMobBh3BuBNOYLE0i",
+  "code challeneg":"gVR9UherDN5Hx56Fkngemgvlexl1qWYf8f5ZTuCsLlI",
+  "uri":"http://localhost:8000/o/authorize/?response_type=code&client_id=lQ3qHF3YmRViXXOIob6OfLEiMobBh3BuBNOYLE0i&redirect_uri=http://localhost:8000/no/callback/&scope=read%20write",
+
+  "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3MjE0Nzk0NiwiaWF0IjoxNzcxNTQzMTQ2LCJqdGkiOiJmZDZjMDA1MzI1NzA0MjkzYjhlNzg1YjY5NTc3YWQ1NSIsInVzZXJfaWQiOjF9.vg2cJok3sq0XwzAORh3RXRnezZeRhQn3KW4X4G2wmdc",
+    "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzcxNTQ0MDQ2LCJpYXQiOjE3NzE1NDMxNDYsImp0aSI6Ijg4MTcyOGNiNmM2NzQ5MGY4MTU3MGRiMWViMjE3NGM1IiwidXNlcl9pZCI6MX0.zy9RIVenGTnm6DBP2Reh0TAs9mf3HLv4SqllA1fpj6g"
+}

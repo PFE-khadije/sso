@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 import pyotp
-from .models import User, Role, Permission, MFAMethod, BiometricProfile, TrustedDevice, UserActivity
+from .models import User, Role, Permission, MFAMethod, BiometricProfile, TrustedDevice, UserActivity, IdentityDocument
 
 # --- User Serializer (with phone conversion) ---
 class UserSerializer(serializers.ModelSerializer):
@@ -61,6 +61,11 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             'first_name': {'required': False, 'allow_blank': True},
             'last_name': {'required': False, 'allow_blank': True},
         }
+
+    def validate(self, attrs):
+        if attrs.get('password') != attrs.get('password2'):
+            raise serializers.ValidationError({'password2': 'Les mots de passe ne correspondent pas.'})
+        return attrs
 
     def create(self, validated_data):
         validated_data.pop('password2')
@@ -123,3 +128,14 @@ class TOTPDisableSerializer(serializers.Serializer):
         if not user.check_password(value):
             raise serializers.ValidationError("Mot de passe incorrect.")
         return value
+
+
+class IdentityDocumentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IdentityDocument
+        fields = [
+            'id', 'document_type', 'front_image', 'back_image',
+            'selfie_image', 'status', 'rejection_reason',
+            'submitted_at', 'reviewed_at',
+        ]
+        read_only_fields = ['status', 'rejection_reason', 'submitted_at', 'reviewed_at']

@@ -1,0 +1,44 @@
+[
+    {
+        "model": "users.permission",
+        "pk": 1,
+        "fields": {
+            "code": "users.view_user",
+            "description": "Peut voir les utilisateurs"
+        }
+    },
+    {
+        "model": "users.permission",
+        "pk": 2,
+        "fields": {
+            "code": "users.edit_user",
+            "description": "Peut modifier les utilisateurs"
+        }
+    },
+    {
+        "model": "users.permission",
+        "pk": 3,
+        "fields": {
+            "code": "users.delete_user",
+            "description": "Peut supprimer des utilisateurs"
+        }
+    },
+    {
+        "model": "users.role",
+        "pk": 1,
+        "fields": {
+            "name": "admin",
+            "description": "Administrateur système",
+            "permissions": [1, 2, 3]
+        }
+    },
+    {
+        "model": "users.role",
+        "pk": 2,
+        "fields": {
+            "name": "user",
+            "description": "Utilisateur standard",
+            "permissions": []
+        }
+    }
+]

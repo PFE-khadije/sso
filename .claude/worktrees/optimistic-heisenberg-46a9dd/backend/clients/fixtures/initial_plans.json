@@ -1,0 +1,55 @@
+[
+  {
+    "model": "clients.plan",
+    "pk": 1,
+    "fields": {
+      "name": "Basic",
+      "description": "Pour les petites équipes, authentification de base",
+      "price_monthly": "9.99",
+      "max_users": 500,
+      "features": {
+        "mfa": true,
+        "biometric": false,
+        "oauth2": true,
+        "support": "email"
+      },
+      "is_active": true
+    }
+  },
+  {
+    "model": "clients.plan",
+    "pk": 2,
+    "fields": {
+      "name": "Pro",
+      "description": "Pour les équipes en croissance, avec biométrie",
+      "price_monthly": "29.99",
+      "max_users": 2000,
+      "features": {
+        "mfa": true,
+        "biometric": true,
+        "oauth2": true,
+        "support": "priority"
+      },
+      "is_active": true
+    }
+  },
+  {
+    "model": "clients.plan",
+    "pk": 3,
+    "fields": {
+      "name": "Enterprise",
+      "description": "Solution sur mesure pour grandes organisations",
+      "price_monthly": "99.99",
+      "max_users": null,
+      "features": {
+        "mfa": true,
+        "biometric": true,
+        "oauth2": true,
+        "support": "24/7",
+        "sso": true,
+        "audit_logs": true
+      },
+      "is_active": true
+    }
+  }
+]

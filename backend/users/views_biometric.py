@@ -33,19 +33,19 @@ class BiometricEnrollView(APIView):
             )
 
         try:
-            # Extraire l'embedding
             result = extract_embedding(image_file.read())
 
             if 'error' in result:
-                return Response(
-                    {'error': result['error']},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                error_msg = result['error']
+                # AI service unavailable / timeout → 503, not 400
+                if any(k in error_msg.lower() for k in ('timeout', 'réseau', 'joindre', 'indisponible', 'network')):
+                    return Response({'error': error_msg}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                return Response({'error': error_msg}, status=status.HTTP_400_BAD_REQUEST)
 
             embedding = result.get('embedding')
             if not embedding:
                 return Response(
-                    {'error': "Impossible d'extraire l'embedding"},
+                    {'error': "Aucun visage détecté. Assurez-vous d'être bien éclairé et regardez la caméra."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 

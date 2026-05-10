@@ -255,8 +255,7 @@ def check_liveness(image_bytes):
 
 # ── OCR helpers ───────────────────────────────────────────────────────────────
 def extract_card_text(image_bytes):
-    """Extracts text from an ID card image using pytesseract.
-    Returns empty string if pytesseract/tesseract is not available."""
+    """Extracts raw text from an ID card image using pytesseract."""
     try:
         import pytesseract
         from PIL import Image
@@ -265,6 +264,61 @@ def extract_card_text(image_bytes):
         return pytesseract.image_to_string(img, lang='fra+ara+eng')
     except Exception:
         return ''
+
+
+def extract_document_info(image_bytes):
+    """Extracts structured info from an ID document.
+    Tries the AI microservice /extract-document endpoint first,
+    then falls back to pytesseract OCR parsing.
+    Returns dict: {first_name, last_name, birth_date, expiry_date, doc_number, raw_text}"""
+    import re
+
+    # Try AI microservice first
+    files = {'image': ('document.jpg', image_bytes, 'image/jpeg')}
+    try:
+        response = requests.post(
+            f"{AI_SERVICE_URL}/extract-document",
+            files=files,
+            headers=_ai_headers(),
+            timeout=30,
+        )
+        if response.ok:
+            data = response.json()
+            # Normalise keys so callers get consistent field names
+            return {
+                'first_name': data.get('first_name') or data.get('prenom'),
+                'last_name': data.get('last_name') or data.get('nom'),
+                'birth_date': data.get('birth_date') or data.get('date_naissance'),
+                'expiry_date': data.get('expiry_date') or data.get('date_expiration'),
+                'doc_number': data.get('doc_number') or data.get('numero'),
+                'raw_text': data.get('raw_text', ''),
+                'source': 'ai',
+            }
+    except requests.RequestException:
+        pass
+
+    # Fallback: pytesseract
+    raw_text = extract_card_text(image_bytes)
+
+    date_pattern = r'\b(\d{2}[./]\d{2}[./]\d{4})\b'
+    dates = re.findall(date_pattern, raw_text)
+    birth_date = dates[0] if len(dates) >= 1 else None
+    expiry_date = dates[-1] if len(dates) >= 2 else None
+
+    doc_number = None
+    num_match = re.search(r'\b([A-Z0-9]{8,12})\b', raw_text)
+    if num_match:
+        doc_number = num_match.group(1)
+
+    return {
+        'first_name': None,
+        'last_name': None,
+        'birth_date': birth_date,
+        'expiry_date': expiry_date,
+        'doc_number': doc_number,
+        'raw_text': raw_text,
+        'source': 'ocr',
+    }
 
 
 def compare_names(registered_name, ocr_text, threshold=0.65):

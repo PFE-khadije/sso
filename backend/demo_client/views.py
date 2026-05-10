@@ -1,14 +1,16 @@
 import os
 import json
+import base64
+import hashlib
+import secrets as _secrets
+from urllib.parse import urlencode
 import requests
 from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
-# In production set DEMO_REDIRECT_URI to your deployed URL, e.g.:
-# DEMO_REDIRECT_URI=https://sso-backend-6b1e.onrender.com/demo/callback/
 REDIRECT_URI = os.getenv('DEMO_REDIRECT_URI', 'http://localhost:8000/demo/callback/')
-SCOPE = 'openid profile email'
+SCOPE = 'openid read'
 
 
 def _get_app():
@@ -17,6 +19,14 @@ def _get_app():
         return Application.objects.get(name='NovaGard Demo Client')
     except Exception:
         return None
+
+
+def _pkce_pair():
+    verifier = _secrets.token_urlsafe(64)
+    challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(verifier.encode()).digest()
+    ).rstrip(b'=').decode()
+    return verifier, challenge
 
 
 def index(request):
@@ -30,36 +40,56 @@ def index(request):
             'access_token': request.session.get('demo_access_token', ''),
         })
 
-    return render(request, 'demo_client/index.html', {
+    verifier, challenge = _pkce_pair()
+    request.session['pkce_verifier'] = verifier
+
+    base_params = {
+        'response_type': 'code',
         'client_id': app.client_id,
         'redirect_uri': REDIRECT_URI,
         'scope': SCOPE,
+        'code_challenge': challenge,
+        'code_challenge_method': 'S256',
+    }
+    authorize_url = '/o/authorize/?' + urlencode(base_params)
+
+    return render(request, 'demo_client/index.html', {
+        'authorize_url': authorize_url,
+        'authorize_url_register': authorize_url + '&prompt=login',
+        'redirect_uri': REDIRECT_URI,
+        'client_id': app.client_id,
     })
 
 
 def callback(request):
     code = request.GET.get('code')
     error = request.GET.get('error')
+    error_description = request.GET.get('error_description', '')
 
     if error or not code:
         return render(request, 'demo_client/error.html', {
             'error': error or 'Code manquant',
-            'description': "L'autorisation a été refusée ou une erreur s'est produite.",
+            'description': error_description or "L'autorisation a été refusée ou une erreur s'est produite.",
         })
 
     app = _get_app()
     if app is None:
         return render(request, 'demo_client/setup_needed.html')
 
+    code_verifier = request.session.pop('pkce_verifier', None)
     token_url = request.build_absolute_uri('/o/token/')
     try:
-        resp = requests.post(token_url, data={
+        token_data = {
             'grant_type': 'authorization_code',
             'code': code,
             'redirect_uri': REDIRECT_URI,
             'client_id': app.client_id,
             'client_secret': app.client_secret,
-        }, timeout=10)
+        }
+        if code_verifier:
+            token_data['code_verifier'] = code_verifier
+
+        resp = requests.post(token_url, data=token_data, timeout=10)
 
         if not resp.ok:
             return render(request, 'demo_client/error.html', {
@@ -92,6 +122,37 @@ def logout_view(request):
     request.session.pop('demo_user', None)
     request.session.pop('demo_access_token', None)
     return redirect('/demo/')
+
+
+def web_register(request):
+    """Web registration for users without the mobile app."""
+    next_url = request.GET.get('next', '/demo/')
+    errors = {}
+
+    if request.method == 'POST':
+        next_url = request.POST.get('next', '/demo/')
+        payload = {
+            'email': request.POST.get('email', '').strip(),
+            'first_name': request.POST.get('first_name', '').strip(),
+            'last_name': request.POST.get('last_name', '').strip(),
+            'password': request.POST.get('password', ''),
+            'password2': request.POST.get('password2', ''),
+        }
+        api_url = request.build_absolute_uri('/api/signup/')
+        try:
+            resp = requests.post(api_url, json=payload, timeout=10)
+            if resp.status_code == 201:
+                from urllib.parse import quote
+                return redirect(f'/accounts/login/?next={quote(next_url)}&registered=1')
+            errors = resp.json()
+        except Exception as exc:
+            errors = {'__all__': [str(exc)]}
+
+    return render(request, 'demo_client/register.html', {
+        'errors': errors,
+        'next': next_url,
+        'post': request.POST if request.method == 'POST' else {},
+    })
 
 
 @csrf_exempt

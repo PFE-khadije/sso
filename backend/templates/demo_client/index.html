@@ -96,11 +96,11 @@
         <div class="scope-item"><div class="scope-icon">✅</div>Statut de vérification d'identité</div>
         <div class="scope-item"><div class="scope-icon">🔒</div>Informations de sécurité du compte</div>
       </div>
-      <a class="login-btn" href="/o/authorize/?response_type=code&client_id={{ client_id }}&redirect_uri={{ redirect_uri }}&scope=openid+read">
+      <a class="login-btn" href="{{ authorize_url }}">
         <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
         Continuer avec NovaGard
       </a>
-      <a class="signup-btn" href="/o/authorize/?response_type=code&client_id={{ client_id }}&redirect_uri={{ redirect_uri }}&scope=openid+read&prompt=login">
+      <a class="signup-btn" href="/demo/register/?next={{ authorize_url|urlencode }}">
         Créer un compte NovaGard
       </a>
     </div>

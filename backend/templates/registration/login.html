@@ -30,6 +30,7 @@
   </div>
   <h1>Connexion SSO</h1>
   <p class="sub">Connectez-vous à votre compte NovaGard pour continuer</p>
+  {% if request.GET.registered %}<div class="error" style="background:rgba(0,212,170,.12);border-color:rgba(0,212,170,.3);color:#00c49a">Compte créé avec succès ! Connectez-vous maintenant.</div>{% endif %}
   {% if form.errors %}<div class="error">Email ou mot de passe incorrect.</div>{% endif %}
   <form method="post">
     {% csrf_token %}
@@ -38,7 +39,7 @@
     <div class="field"><label>Mot de passe</label><input type="password" name="password" placeholder="••••••••"></div>
     <button type="submit" class="btn">Se connecter</button>
   </form>
-  <p class="hint">Pas encore de compte ? Créez-en un via l'application mobile NovaGard.</p>
+  <p class="hint">Pas encore de compte ? <a href="/demo/register/?next={{ next|urlencode }}">Créer un compte</a></p>
 </div>
 </body>
 </html>

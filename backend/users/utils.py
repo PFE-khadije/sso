@@ -1,7 +1,5 @@
-import random
 import json
 import base64
-import redis
 import secrets
 import math
 import datetime
@@ -10,29 +8,31 @@ from django.urls import reverse
 
 import requests
 from django.conf import settings
-from django.core.mail import send_mail
+from django.core.cache import cache          # uses Redis in prod, LocMemCache in dev
 from django.core.exceptions import ImproperlyConfigured
 from cryptography.fernet import Fernet
 from users.models import UserActivity
 from django.utils import timezone
 from .models import PasswordResetToken
 
-# ── Redis connection ──────────────────────────────────────────────────────────
-redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
-# ── OTP functions ────────────────────────────────────────────────────────────
+# ── OTP functions ─────────────────────────────────────────────────────────────
+# OTPs are stored via Django's cache framework, which is already configured in
+# settings.py: Redis when REDIS_URL is set, LocMemCache otherwise.
+# This means email/SMS MFA works in both production and development.
+
 def generate_otp(length=6):
-    """Génère un code OTP numérique."""
-    return ''.join(str(random.randint(0, 9)) for _ in range(length))
+    """Génère un code OTP numérique (cryptographically secure)."""
+    return ''.join(str(secrets.randbelow(10)) for _ in range(length))
 
 def store_otp(key, otp, ttl=300):
-    """Stocke un OTP dans Redis (durée de vie en secondes)."""
-    redis_client.setex(key, ttl, otp)
+    """Stocke un OTP dans le cache Django (Redis en prod, LocMemCache en dev)."""
+    cache.set(key, otp, timeout=ttl)
 
 def verify_otp(key, otp):
     """Vérifie un OTP et le supprime si valide."""
-    stored = redis_client.get(key)
+    stored = cache.get(key)
     if stored and stored == otp:
-        redis_client.delete(key)
+        cache.delete(key)
         return True
     return False
 
@@ -42,26 +42,64 @@ def generate_password_reset_token(user):
     PasswordResetToken.objects.create(user=user, token=token)
     return token
 
+_EMAIL_MICROSERVICE_URL = "https://bmnext.pythonanywhere.com/senders/send-email"
+_EMAIL_SENDER = {"name": "NovaGard", "color": "#1A73E8"}
+
+def _send_email(to, subject, message):
+    """Sends an email via the Email Microservice API."""
+    import logging
+    api_key = getattr(settings, 'EMAIL_MICROSERVICE_API_KEY', None)
+    if not api_key:
+        logging.getLogger(__name__).error(
+            "EMAIL_MICROSERVICE_API_KEY is not set — email to %s was not sent.", to
+        )
+        return
+    payload = {
+        "api_key": api_key,
+        "to": to,
+        "subject": subject,
+        "message": message,
+        "sender": _EMAIL_SENDER,
+    }
+    try:
+        response = requests.post(_EMAIL_MICROSERVICE_URL, json=payload, timeout=10)
+        if not response.ok:
+            logging.getLogger(__name__).error(
+                "Email microservice error %s: %s", response.status_code, response.text
+            )
+    except requests.RequestException as exc:
+        logging.getLogger(__name__).error("Email microservice unreachable: %s", exc)
+
+
 def send_password_reset_email(user, request):
     token = generate_password_reset_token(user)
     reset_url = request.build_absolute_uri(f'/api/password-reset/confirm/?token={token}')
-    subject = "Password Reset Request"
-    message = f"Click the link to reset your password: {reset_url}\nThis link expires in 1 hour."
-    send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user.email])
+    _send_email(
+        to=user.email,
+        subject="Password Reset Request",
+        message=f"Click the link to reset your password: {reset_url}\nThis link expires in 1 hour.",
+    )
 
 def send_email_otp(email, otp):
     """Envoie un OTP par email."""
-    subject = "Votre code de vérification"
-    message = f"Votre code de vérification est : {otp}\nCe code est valable 5 minutes."
-    send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email])
+    _send_email(
+        to=email,
+        subject="Votre code de vérification",
+        message=f"Votre code de vérification est : {otp}\nCe code est valable 5 minutes.",
+    )
 
 def send_sms_otp(phone, otp):
     """
     Envoie un OTP par SMS.
-    En développement : affiche dans la console.
-    En production : remplacer par un vrai service SMS (Twilio, etc.)
+    TODO: Integrate a real SMS provider (Twilio, Vonage, etc.) for production.
+    Until then, SMS OTP is logged to the console only — do NOT enable SMS MFA in prod.
     """
-    print(f"*** SMS OTP for {phone}: {otp} ***")
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "SMS OTP requested for %s but no SMS provider is configured. "
+        "Code: %s — integrate Twilio or similar before enabling SMS MFA in production.",
+        phone, otp
+    )
 
 # ── Activity logging ─────────────────────────────────────────────────────────
 def log_user_activity(user, event_type, description, request=None):

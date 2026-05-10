@@ -5,18 +5,17 @@ import base64
 from datetime import timedelta
 from rest_framework import status, viewsets
 from rest_framework.response import Response
-from rest_framework.views import APIView, csrf_exempt
+from rest_framework.views import APIView
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.decorators import action
 from django.utils.decorators import method_decorator
 from django_ratelimit.decorators import ratelimit
 from django.utils import timezone
-from datetime import timedelta
 from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 from rest_framework_simplejwt.exceptions import TokenError
 from oauth2_provider.contrib.rest_framework import OAuth2Authentication
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from oauth2_provider.views.oidc import UserInfoView as BaseUserInfoView
 from .models import PasswordResetToken, User, Role, Permission, MFAMethod, BiometricProfile, TrustedDevice, LoginLockout
 from .serializers import (
     UserSerializer, RoleSerializer, PermissionSerializer,
@@ -367,7 +366,7 @@ class LoginView(APIView):
             lockout, _ = LoginLockout.objects.get_or_create(identifier=raw_id)
             lockout.attempts += 1
             if lockout.attempts >= 5:
-                lockout.locked_until = timezone.now() + timedelta(days=3)
+                lockout.locked_until = timezone.now() + timedelta(minutes=15)
             lockout.save()
 
         return Response(serializer.errors, status=400)

@@ -1,7 +1,10 @@
+import os
 import requests
 from django.shortcuts import render, redirect
 
-REDIRECT_URI = 'http://localhost:8000/demo/callback/'
+# In production set DEMO_REDIRECT_URI to your deployed URL, e.g.:
+# DEMO_REDIRECT_URI=https://sso-backend-6b1e.onrender.com/demo/callback/
+REDIRECT_URI = os.getenv('DEMO_REDIRECT_URI', 'http://localhost:8000/demo/callback/')
 SCOPE = 'openid profile email'
 
 

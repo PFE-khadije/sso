@@ -16,6 +16,7 @@ env/
 .env
 .env.*
 
+
 # Django
 db.sqlite3
 media/

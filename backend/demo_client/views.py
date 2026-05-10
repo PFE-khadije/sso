@@ -1,6 +1,9 @@
 import os
+import json
 import requests
 from django.shortcuts import render, redirect
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
 
 # In production set DEMO_REDIRECT_URI to your deployed URL, e.g.:
 # DEMO_REDIRECT_URI=https://sso-backend-6b1e.onrender.com/demo/callback/
@@ -89,3 +92,28 @@ def logout_view(request):
     request.session.pop('demo_user', None)
     request.session.pop('demo_access_token', None)
     return redirect('/demo/')
+
+
+@csrf_exempt
+def qr_session(request):
+    """Called by JS after QR confirmation. Receives the JWT access token,
+    fetches userinfo, and creates a demo session — same as the OAuth2 callback."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    try:
+        body = json.loads(request.body)
+        access = body.get('access')
+        if not access:
+            return JsonResponse({'error': 'access token required'}, status=400)
+        userinfo_url = request.build_absolute_uri('/api/userinfo/')
+        user_resp = requests.get(
+            userinfo_url,
+            headers={'Authorization': f'Bearer {access}'},
+            timeout=10,
+        )
+        user_data = user_resp.json() if user_resp.ok else {}
+        request.session['demo_user'] = user_data
+        request.session['demo_access_token'] = access
+        return JsonResponse({'success': True})
+    except Exception as exc:
+        return JsonResponse({'error': str(exc)}, status=500)

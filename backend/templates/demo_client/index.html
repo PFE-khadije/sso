@@ -16,14 +16,24 @@
   .features{display:flex;flex-direction:column;gap:10px;margin-bottom:36px}
   .feat{display:flex;align-items:center;gap:10px;font-size:14px;color:#5A6080}
   .feat-dot{width:8px;height:8px;border-radius:50%;background:#4F6AF5;flex-shrink:0}
+
+  /* ── SSO Card ── */
   .sso-card{background:white;border-radius:24px;padding:36px;box-shadow:0 4px 40px rgba(0,0,0,.08);flex:1;max-width:380px}
-  .sso-header{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+  .sso-header{display:flex;align-items:center;gap:12px;margin-bottom:20px}
   .sso-logo{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#4F6AF5,#7B5EA7);display:flex;align-items:center;justify-content:center}
   .sso-logo svg{width:22px;height:22px;fill:white}
   .sso-name{font-size:18px;font-weight:800;color:#1A1D2E}
-  .sso-sub{font-size:13px;color:#8B92B2;margin-bottom:28px}
-  .divider{height:1px;background:#E8EAF6;margin:20px 0}
-  .scope-list{margin-bottom:28px}
+
+  /* ── Tabs ── */
+  .tabs{display:flex;background:#F0F3FF;border-radius:14px;padding:4px;margin-bottom:24px;gap:4px}
+  .tab-btn{flex:1;padding:9px;border:none;border-radius:10px;background:transparent;font-size:13px;font-weight:600;color:#8B92B2;cursor:pointer;transition:all .2s}
+  .tab-btn.active{background:white;color:#1A1D2E;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+  .tab-content{display:none}
+  .tab-content.active{display:block}
+
+  /* ── SSO tab ── */
+  .sso-sub{font-size:13px;color:#8B92B2;margin-bottom:20px}
+  .scope-list{margin-bottom:24px}
   .scope-item{display:flex;align-items:center;gap:10px;padding:10px 0;font-size:13px;color:#5A6080;border-bottom:1px solid #F0F2FF}
   .scope-item:last-child{border-bottom:none}
   .scope-icon{width:32px;height:32px;border-radius:8px;background:#EEF1FF;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px}
@@ -32,6 +42,23 @@
   .login-btn svg{width:20px;height:20px;fill:white}
   .signup-btn{display:block;text-align:center;width:100%;padding:14px;border-radius:16px;border:2px solid #E0E4FF;background:transparent;color:#4F6AF5;font-size:15px;font-weight:600;cursor:pointer;text-decoration:none;transition:background .2s}
   .signup-btn:hover{background:#F0F3FF}
+
+  /* ── QR tab ── */
+  .qr-container{display:flex;flex-direction:column;align-items:center;gap:16px;padding:8px 0}
+  .qr-sub{font-size:13px;color:#8B92B2;text-align:center;line-height:1.5}
+  .qr-frame{width:200px;height:200px;border-radius:16px;background:#F0F3FF;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+  .qr-frame img{width:100%;height:100%;border-radius:16px}
+  .qr-spinner{width:36px;height:36px;border:3px solid #E0E4FF;border-top-color:#4F6AF5;border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .qr-countdown{font-size:12px;font-weight:700;color:#8B92B2}
+  .qr-countdown span{color:#4F6AF5}
+  .qr-status{font-size:13px;font-weight:600;text-align:center;padding:10px 16px;border-radius:10px;width:100%}
+  .qr-status.waiting{background:#EEF1FF;color:#4F6AF5}
+  .qr-status.success{background:rgba(0,212,170,.12);color:#007a5e}
+  .qr-status.expired{background:#FFF3F3;color:#c0392b}
+  .qr-refresh-btn{width:100%;padding:13px;border-radius:14px;border:2px solid #E0E4FF;background:transparent;color:#4F6AF5;font-size:14px;font-weight:600;cursor:pointer;transition:background .2s}
+  .qr-refresh-btn:hover{background:#F0F3FF}
+
   .note{margin-top:16px;text-align:center;font-size:11px;color:#9099C0}
   @media(max-width:700px){.page{flex-direction:column}.app-side{text-align:center}.feat{justify-content:center}}
 </style>
@@ -53,27 +80,153 @@
   <div class="sso-card">
     <div class="sso-header">
       <div class="sso-logo"><svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg></div>
-      <div>
-        <div class="sso-name">NovaGard SSO</div>
+      <div><div class="sso-name">NovaGard SSO</div></div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('sso')">Connexion SSO</button>
+      <button class="tab-btn" onclick="switchTab('qr')" id="qr-tab-btn">QR Code</button>
+    </div>
+
+    <!-- SSO tab -->
+    <div id="tab-sso" class="tab-content active">
+      <p class="sso-sub">Demo App souhaite accéder à votre compte NovaGard</p>
+      <div class="scope-list">
+        <div class="scope-item"><div class="scope-icon">👤</div>Votre nom et adresse email</div>
+        <div class="scope-item"><div class="scope-icon">✅</div>Statut de vérification d'identité</div>
+        <div class="scope-item"><div class="scope-icon">🔒</div>Informations de sécurité du compte</div>
+      </div>
+      <a class="login-btn" href="/o/authorize/?response_type=code&client_id={{ client_id }}&redirect_uri={{ redirect_uri }}&scope=openid+read">
+        <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
+        Continuer avec NovaGard
+      </a>
+      <a class="signup-btn" href="/o/authorize/?response_type=code&client_id={{ client_id }}&redirect_uri={{ redirect_uri }}&scope=openid+read&prompt=login">
+        Créer un compte NovaGard
+      </a>
+    </div>
+
+    <!-- QR tab -->
+    <div id="tab-qr" class="tab-content">
+      <div class="qr-container">
+        <p class="qr-sub">Scannez avec l'application <strong>NovaGard</strong> sur votre téléphone pour vous connecter instantanément</p>
+        <div class="qr-frame" id="qr-frame">
+          <div class="qr-spinner"></div>
+        </div>
+        <div class="qr-countdown" id="qr-countdown" style="display:none">
+          Expire dans <span id="qr-timer">3:00</span>
+        </div>
+        <div class="qr-status waiting" id="qr-status">En attente du scan...</div>
+        <button class="qr-refresh-btn" id="qr-refresh" style="display:none" onclick="startQR()">
+          Générer un nouveau QR
+        </button>
       </div>
     </div>
-    <p class="sso-sub">Demo App souhaite accéder à votre compte NovaGard</p>
 
-    <div class="scope-list">
-      <div class="scope-item"><div class="scope-icon">👤</div>Votre nom et adresse email</div>
-      <div class="scope-item"><div class="scope-icon">✅</div>Statut de vérification d'identité</div>
-      <div class="scope-item"><div class="scope-icon">🔒</div>Informations de sécurité du compte</div>
-    </div>
-
-    <a class="login-btn" href="/o/authorize/?response_type=code&client_id={{ client_id }}&redirect_uri=http://localhost:8000/demo/callback/&scope=openid+read">
-      <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
-      Continuer avec NovaGard
-    </a>
-    <a class="signup-btn" href="/o/authorize/?response_type=code&client_id={{ client_id }}&redirect_uri=http://localhost:8000/demo/callback/&scope=openid+read&prompt=login">
-      Créer un compte NovaGard
-    </a>
-    <p class="note">En continuant, vous acceptez que Demo App accède aux données listées ci-dessus via NovaGard SSO.</p>
+    <p class="note">En continuant, vous acceptez que Demo App accède à vos données via NovaGard SSO.</p>
   </div>
 </div>
+
+<script>
+  let pollTimer = null;
+  let countdownTimer = null;
+  let currentToken = null;
+  let secondsLeft = 0;
+
+  function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    event.currentTarget.classList.add('active');
+    if (tab === 'qr' && !currentToken) startQR();
+  }
+
+  async function startQR() {
+    stopPolling();
+    currentToken = null;
+    setStatus('waiting', 'Génération du QR...');
+    document.getElementById('qr-refresh').style.display = 'none';
+    document.getElementById('qr-countdown').style.display = 'none';
+    document.getElementById('qr-frame').innerHTML = '<div class="qr-spinner"></div>';
+
+    try {
+      const resp = await fetch('/api/qr-login/generate/', {method: 'POST'});
+      const data = await resp.json();
+      currentToken = data.token;
+
+      document.getElementById('qr-frame').innerHTML =
+        `<img src="${data.qr_code}" alt="QR Code">`;
+      document.getElementById('qr-countdown').style.display = 'block';
+      setStatus('waiting', 'En attente du scan...');
+      startCountdown(179);
+      pollTimer = setInterval(pollStatus, 2500);
+    } catch {
+      setStatus('expired', 'Erreur de connexion. Réessayez.');
+      document.getElementById('qr-refresh').style.display = 'block';
+    }
+  }
+
+  async function pollStatus() {
+    if (!currentToken) return;
+    try {
+      const resp = await fetch(`/api/qr-login/${currentToken}/status/`);
+      const data = await resp.json();
+
+      if (data.status === 'confirmed') {
+        stopPolling();
+        setStatus('success', 'QR scanné ! Connexion en cours...');
+        document.getElementById('qr-frame').innerHTML = '<div style="font-size:56px">✅</div>';
+        await fetch('/demo/qr-session/', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({access: data.access}),
+        });
+        window.location.href = '/demo/';
+      } else if (data.status === 'expired' || data.status === 'invalid') {
+        stopPolling();
+        showExpired();
+      }
+    } catch { /* network hiccup — keep polling */ }
+  }
+
+  function startCountdown(seconds) {
+    secondsLeft = seconds;
+    updateCountdownDisplay();
+    countdownTimer = setInterval(() => {
+      secondsLeft--;
+      updateCountdownDisplay();
+      if (secondsLeft <= 0) {
+        stopPolling();
+        showExpired();
+      }
+    }, 1000);
+  }
+
+  function updateCountdownDisplay() {
+    const m = Math.floor(secondsLeft / 60);
+    const s = String(secondsLeft % 60).padStart(2, '0');
+    document.getElementById('qr-timer').textContent = `${m}:${s}`;
+  }
+
+  function stopPolling() {
+    clearInterval(pollTimer);
+    clearInterval(countdownTimer);
+    pollTimer = null;
+    countdownTimer = null;
+    currentToken = null;
+  }
+
+  function showExpired() {
+    setStatus('expired', 'QR expiré.');
+    document.getElementById('qr-frame').innerHTML = '<div style="font-size:56px;opacity:.3">⏱️</div>';
+    document.getElementById('qr-countdown').style.display = 'none';
+    document.getElementById('qr-refresh').style.display = 'block';
+  }
+
+  function setStatus(type, msg) {
+    const el = document.getElementById('qr-status');
+    el.className = `qr-status ${type}`;
+    el.textContent = msg;
+  }
+</script>
 </body>
 </html>

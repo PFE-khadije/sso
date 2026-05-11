@@ -307,26 +307,34 @@ def check_liveness(image_bytes):
 
 
 # ── OCR helpers ───────────────────────────────────────────────────────────────
+_OCR_SERVICE_URL = "https://cheikhabdelkader.pythonanywhere.com/ocr"
+
 def extract_card_text(image_bytes):
-    """Extracts raw text from an ID card image using pytesseract."""
+    """Extracts raw text from an ID card image via the NovaID OCR service."""
     try:
-        import pytesseract
-        from PIL import Image
-        import io
-        img = Image.open(io.BytesIO(image_bytes))
-        return pytesseract.image_to_string(img, lang='fra+ara+eng')
+        response = requests.post(
+            _OCR_SERVICE_URL,
+            files={'image': ('document.jpg', image_bytes, 'image/jpeg')},
+            timeout=30,
+        )
+        if response.ok:
+            data = response.json()
+            # Service may return {'text': '...'} or {'raw_text': '...'} or plain text
+            if isinstance(data, dict):
+                return data.get('text') or data.get('raw_text') or ''
+            return str(data)
     except Exception:
-        return ''
+        pass
+    return ''
 
 
 def extract_document_info(image_bytes):
     """Extracts structured info from an ID document.
-    Tries the AI microservice /extract-document endpoint first,
-    then falls back to pytesseract OCR parsing.
+    Priority: AI microservice /extract-document → NovaID OCR service → empty result.
     Returns dict: {first_name, last_name, birth_date, expiry_date, doc_number, raw_text}"""
     import re
 
-    # Try AI microservice first
+    # 1. Try AI microservice structured extraction
     files = {'image': ('document.jpg', image_bytes, 'image/jpeg')}
     try:
         response = requests.post(
@@ -337,7 +345,6 @@ def extract_document_info(image_bytes):
         )
         if response.ok:
             data = response.json()
-            # Normalise keys so callers get consistent field names
             return {
                 'first_name': data.get('first_name') or data.get('prenom'),
                 'last_name': data.get('last_name') or data.get('nom'),
@@ -350,7 +357,37 @@ def extract_document_info(image_bytes):
     except requests.RequestException:
         pass
 
-    # Fallback: pytesseract
+    # 2. Fallback: NovaID OCR service — may return structured fields directly
+    try:
+        ocr_resp = requests.post(
+            _OCR_SERVICE_URL,
+            files={'image': ('document.jpg', image_bytes, 'image/jpeg')},
+            timeout=30,
+        )
+        if ocr_resp.ok:
+            data = ocr_resp.json()
+            if isinstance(data, dict):
+                # If the service returns structured fields, use them
+                first_name = data.get('first_name') or data.get('prenom')
+                last_name = data.get('last_name') or data.get('nom')
+                birth_date = data.get('birth_date') or data.get('date_naissance')
+                expiry_date = data.get('expiry_date') or data.get('date_expiration')
+                doc_number = data.get('doc_number') or data.get('numero')
+                raw_text = data.get('text') or data.get('raw_text') or ''
+                if any([first_name, last_name, birth_date, doc_number, raw_text]):
+                    return {
+                        'first_name': first_name,
+                        'last_name': last_name,
+                        'birth_date': birth_date,
+                        'expiry_date': expiry_date,
+                        'doc_number': doc_number,
+                        'raw_text': raw_text,
+                        'source': 'ocr',
+                    }
+    except requests.RequestException:
+        pass
+
+    # 3. Parse whatever raw text we have from OCR
     raw_text = extract_card_text(image_bytes)
 
     date_pattern = r'\b(\d{2}[./]\d{2}[./]\d{4})\b'

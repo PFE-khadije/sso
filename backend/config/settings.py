@@ -99,6 +99,11 @@ else:
         "https://sso-backend-6b1e.onrender.com",
         *_extra,
     ]
+    # Flutter web dev server uses an arbitrary port; match any localhost origin.
+    CORS_ALLOWED_ORIGIN_REGEXES = [
+        r'^http://localhost:\d+$',
+        r'^http://127\.0\.0\.1:\d+$',
+    ]
 
 ROOT_URLCONF = 'config.urls'
 

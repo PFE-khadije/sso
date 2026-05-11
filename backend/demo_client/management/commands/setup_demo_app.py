@@ -4,7 +4,7 @@ from django.core.management.base import BaseCommand
 # Space-separated list accepted by django-oauth-toolkit.
 # Always includes localhost for local development plus whatever is in env.
 _PROD_URI = os.getenv('DEMO_REDIRECT_URI', '').strip()
-REDIRECT_URIS = 'http://localhost:8000/demo/callback/'
+REDIRECT_URIS = 'https://sso-backend-6b1e.onrender.com/demo/callback/'
 if _PROD_URI and _PROD_URI != 'http://localhost:8000/demo/callback/':
     REDIRECT_URIS = f'{REDIRECT_URIS} {_PROD_URI}'
 

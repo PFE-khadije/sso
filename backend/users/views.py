@@ -52,7 +52,7 @@ class OIDCUserInfoView(APIView):
         if "email" in scopes:
             claims.update({
                 "email": user.email,
-                "email_verified": True,
+                "email_verified": user.email_verified,
             })
 
         # Profile scope
@@ -82,7 +82,7 @@ class UserInfoView(APIView):
         data = {
             "sub": str(user.id),
             "email": user.email,
-            "email_verified": True,
+            "email_verified": user.email_verified,
             "phone": str(user.phone) if user.phone else None,
             "phone_verified": False,
             "preferred_username": user.email.split('@')[0] if user.email else "",

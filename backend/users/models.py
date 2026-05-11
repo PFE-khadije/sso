@@ -126,10 +126,13 @@ class PasswordResetToken(models.Model):
 class TrustedDevice(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='trusted_devices')
     device_name = models.CharField(max_length=255)
-    device_fingerprint = models.CharField(max_length=255, unique=True)
+    device_fingerprint = models.CharField(max_length=255)
     last_used = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
+
+    class Meta:
+        unique_together = ('user', 'device_fingerprint')
 
     def __str__(self):
         return f"{self.device_name} for {self.user.email}"

@@ -17,10 +17,21 @@ from .utils import (
 logger = logging.getLogger(__name__)
 
 
+_LIVENESS_SERVICE_ERROR = 'Le service de vérification de vivacité est indisponible. Réessayez dans quelques instants.'
+_LIVENESS_FAIL = 'Liveness check échoué. Regardez directement la caméra et réessayez.'
+
+
+def _check_liveness_strict(image_bytes):
+    """Returns a Response to send immediately, or None if liveness passed."""
+    liveness = check_liveness(image_bytes)
+    if 'error' in liveness:
+        return Response({'error': _LIVENESS_SERVICE_ERROR}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    if not liveness.get('live', False):
+        return Response({'error': _LIVENESS_FAIL}, status=status.HTTP_401_UNAUTHORIZED)
+    return None
+
+
 class BiometricEnrollView(APIView):
-    """
-    Enrôlement biométrique (sans détection de vivacité)
-    """
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
 
@@ -33,7 +44,13 @@ class BiometricEnrollView(APIView):
             )
 
         try:
-            result = extract_embedding(image_file.read())
+            image_bytes = image_file.read()
+
+            liveness_response = _check_liveness_strict(image_bytes)
+            if liveness_response is not None:
+                return liveness_response
+
+            result = extract_embedding(image_bytes)
 
             if 'error' in result:
                 error_msg = result['error']
@@ -108,13 +125,9 @@ class BiometricLoginView(APIView):
 
         image_bytes = image_file.read()
 
-        # Liveness check — only reject on explicit False; ignore service errors
-        liveness = check_liveness(image_bytes)
-        if 'error' not in liveness and not liveness.get('live', True):
-            return Response(
-                {'error': 'Liveness check échoué. Regardez directement la caméra et réessayez.'},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
+        liveness_response = _check_liveness_strict(image_bytes)
+        if liveness_response is not None:
+            return liveness_response
 
         # Check biometric profile
         try:
@@ -228,13 +241,9 @@ class BiometricIdentifyView(APIView):
 
         image_bytes = image_file.read()
 
-        # Liveness check
-        liveness = check_liveness(image_bytes)
-        if 'error' not in liveness and not liveness.get('live', True):
-            return Response(
-                {'error': 'Liveness check échoué. Regardez directement la caméra et réessayez.'},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
+        liveness_response = _check_liveness_strict(image_bytes)
+        if liveness_response is not None:
+            return liveness_response
 
         # Extract embedding from the query image
         emb_result = extract_embedding(image_bytes)

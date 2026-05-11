@@ -147,7 +147,7 @@ def oidc_claims_provider(user, scopes, claims):
 
     if 'email' in scope_set:
         claims['email'] = user.email
-        claims['email_verified'] = True
+        claims['email_verified'] = user.email_verified
 
     if 'profile' in scope_set:
         claims['given_name'] = user.first_name or ''

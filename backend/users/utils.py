@@ -439,9 +439,9 @@ def auto_register_device(user, request):
     device_name = request.META.get('HTTP_X_DEVICE_NAME', 'Mobile Device')
     expires_at = timezone.now() + datetime.timedelta(days=30)
     TrustedDevice.objects.update_or_create(
+        user=user,
         device_fingerprint=fingerprint,
         defaults={
-            'user': user,
             'device_name': device_name,
             'expires_at': expires_at,
         },

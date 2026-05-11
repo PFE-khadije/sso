@@ -3,14 +3,11 @@ import json
 import base64
 import hashlib
 import secrets as _secrets
-from urllib.parse import urlencode
+from urllib.parse import urlencode, quote
 import requests
 from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-
-REDIRECT_URI = os.getenv('DEMO_REDIRECT_URI', 'http://localhost:8000/demo/callback/')
-SCOPE = 'openid read'
 
 
 def _get_app():
@@ -29,6 +26,12 @@ def _pkce_pair():
     return verifier, challenge
 
 
+def _redirect_uri(request):
+    """Always derives the callback URL from the current request host,
+    so it works identically on localhost and on Render."""
+    return request.build_absolute_uri('/demo/callback/')
+
+
 def index(request):
     app = _get_app()
     if app is None:
@@ -40,23 +43,25 @@ def index(request):
             'access_token': request.session.get('demo_access_token', ''),
         })
 
+    redirect_uri = _redirect_uri(request)
     verifier, challenge = _pkce_pair()
     request.session['pkce_verifier'] = verifier
+    request.session['demo_redirect_uri'] = redirect_uri
 
-    base_params = {
+    params = {
         'response_type': 'code',
         'client_id': app.client_id,
-        'redirect_uri': REDIRECT_URI,
-        'scope': SCOPE,
+        'redirect_uri': redirect_uri,
+        'scope': 'openid read',
         'code_challenge': challenge,
         'code_challenge_method': 'S256',
     }
-    authorize_url = '/o/authorize/?' + urlencode(base_params)
+    authorize_url = '/o/authorize/?' + urlencode(params)
 
     return render(request, 'demo_client/index.html', {
         'authorize_url': authorize_url,
         'authorize_url_register': authorize_url + '&prompt=login',
-        'redirect_uri': REDIRECT_URI,
+        'redirect_uri': redirect_uri,
         'client_id': app.client_id,
     })
 
@@ -76,13 +81,15 @@ def callback(request):
     if app is None:
         return render(request, 'demo_client/setup_needed.html')
 
+    redirect_uri = request.session.pop('demo_redirect_uri', _redirect_uri(request))
     code_verifier = request.session.pop('pkce_verifier', None)
     token_url = request.build_absolute_uri('/o/token/')
+
     try:
         token_data = {
             'grant_type': 'authorization_code',
             'code': code,
-            'redirect_uri': REDIRECT_URI,
+            'redirect_uri': redirect_uri,
             'client_id': app.client_id,
             'client_secret': app.client_secret,
         }
@@ -90,7 +97,6 @@ def callback(request):
             token_data['code_verifier'] = code_verifier
 
         resp = requests.post(token_url, data=token_data, timeout=10)
-
         if not resp.ok:
             return render(request, 'demo_client/error.html', {
                 'error': 'Échange de token échoué',
@@ -98,7 +104,6 @@ def callback(request):
             })
 
         access_token = resp.json().get('access_token', '')
-
         userinfo_url = request.build_absolute_uri('/api/userinfo/')
         user_resp = requests.get(
             userinfo_url,
@@ -106,7 +111,6 @@ def callback(request):
             timeout=10,
         )
         user_data = user_resp.json() if user_resp.ok else {}
-
         request.session['demo_user'] = user_data
         request.session['demo_access_token'] = access_token
         return redirect('/demo/')
@@ -131,6 +135,28 @@ def web_register(request):
 
     if request.method == 'POST':
         next_url = request.POST.get('next', '/demo/')
+        step = request.POST.get('step', 'register')
+
+        # Step 2: verify email OTP
+        if step == 'verify':
+            email = request.POST.get('email', '').strip()
+            code = request.POST.get('code', '').strip()
+            api_url = request.build_absolute_uri('/api/verify-email/')
+            try:
+                resp = requests.post(api_url, json={'email': email, 'code': code}, timeout=10)
+                if resp.status_code == 200:
+                    return redirect(f'/accounts/login/?next={quote(next_url)}&verified=1')
+                errors = resp.json()
+            except Exception as exc:
+                errors = {'__all__': [str(exc)]}
+            return render(request, 'demo_client/register.html', {
+                'errors': errors,
+                'next': next_url,
+                'pending_email': email,
+                'step': 'verify',
+            })
+
+        # Step 1: create account
         payload = {
             'email': request.POST.get('email', '').strip(),
             'first_name': request.POST.get('first_name', '').strip(),
@@ -142,8 +168,11 @@ def web_register(request):
         try:
             resp = requests.post(api_url, json=payload, timeout=10)
             if resp.status_code == 201:
-                from urllib.parse import quote
-                return redirect(f'/accounts/login/?next={quote(next_url)}&registered=1')
+                return render(request, 'demo_client/register.html', {
+                    'next': next_url,
+                    'pending_email': payload['email'],
+                    'step': 'verify',
+                })
             errors = resp.json()
         except Exception as exc:
             errors = {'__all__': [str(exc)]}
@@ -152,13 +181,14 @@ def web_register(request):
         'errors': errors,
         'next': next_url,
         'post': request.POST if request.method == 'POST' else {},
+        'step': 'register',
     })
 
 
 @csrf_exempt
 def qr_session(request):
-    """Called by JS after QR confirmation. Receives the JWT access token,
-    fetches userinfo, and creates a demo session — same as the OAuth2 callback."""
+    """Called by JS after QR confirmation. Receives the JWT, fetches userinfo,
+    and creates a demo session — same as the OAuth2 callback."""
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
     try:

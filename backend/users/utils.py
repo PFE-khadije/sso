@@ -88,6 +88,21 @@ def send_email_otp(email, otp):
         message=f"Votre code de vérification est : {otp}\nCe code est valable 5 minutes.",
     )
 
+def send_verification_email(user):
+    """Génère et envoie un OTP de vérification d'email après l'inscription."""
+    otp = generate_otp()
+    store_otp(f'email_verify:{user.id}', otp, ttl=600)
+    _send_email(
+        to=user.email,
+        subject="Vérifiez votre adresse email — NovaGard",
+        message=(
+            f"Bienvenue sur NovaGard !\n\n"
+            f"Votre code de vérification est : {otp}\n"
+            f"Ce code est valable 10 minutes.\n\n"
+            f"Si vous n'avez pas créé de compte, ignorez cet email."
+        ),
+    )
+
 def send_sms_otp(phone, otp):
     """
     Envoie un OTP par SMS.

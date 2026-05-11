@@ -7,7 +7,7 @@ from .views import (
     TOTPEnableView, TOTPDisableView, TOTPVerifyView, MFAVerifyView,
     UserInfoView, UserMeView, UserAuthMethodsView, ChangePasswordView,
     SendOTPView, EmailOTPEnableView, SMSOTPEnableView, PasswordResetRequestView, PasswordResetConfirmView,
-    FCMTokenView, UnlockWithMFAView,
+    FCMTokenView, UnlockWithMFAView, VerifyEmailView,
 )
 from .views_qr import QRLoginGenerateView, QRLoginConfirmView, QRLoginStatusView
 from .views_dashboard import UserAuthorizedAppsView, UserRevokeAppView, UserActivityView ,UserDevicesView, UserDeviceDetailView
@@ -29,6 +29,7 @@ urlpatterns = [
     path('user/change-password/', ChangePasswordView.as_view(), name='change-password'),
     path('userinfo/', UserInfoView.as_view(), name='userinfo'),
     path('signup/', SignupView.as_view(), name='signup'),
+    path('verify-email/', VerifyEmailView.as_view(), name='verify-email'),
     path('login/', LoginView.as_view(), name='login'),
     path('logout/', LogoutView.as_view(), name='logout'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),

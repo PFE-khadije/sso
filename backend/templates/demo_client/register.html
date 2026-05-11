@@ -45,44 +45,64 @@
     </div>
   {% endif %}
 
-  <form method="post">
-    {% csrf_token %}
-    <input type="hidden" name="next" value="{{ next }}">
-
-    <div class="row">
+  {% if step == 'verify' %}
+    <h1>Vérifiez votre email</h1>
+    <p class="sub">Un code à 6 chiffres a été envoyé à <strong>{{ pending_email }}</strong>. Saisissez-le ci-dessous pour activer votre compte.</p>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ next }}">
+      <input type="hidden" name="step" value="verify">
+      <input type="hidden" name="email" value="{{ pending_email }}">
       <div class="field">
-        <label>Prénom</label>
-        <input type="text" name="first_name" value="{{ post.first_name }}" placeholder="Jean">
+        <label>Code de vérification</label>
+        <input type="text" name="code" placeholder="123456" maxlength="6" inputmode="numeric"
+               autocomplete="one-time-code" required autofocus style="letter-spacing:8px;font-size:22px;text-align:center">
       </div>
+      <button type="submit" class="btn">Vérifier mon email</button>
+    </form>
+    <div class="divider"></div>
+    <p class="hint">Pas reçu ? <a href="/api/verify-email/?email={{ pending_email|urlencode }}">Renvoyer le code</a></p>
+  {% else %}
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ next }}">
+      <input type="hidden" name="step" value="register">
+
+      <div class="row">
+        <div class="field">
+          <label>Prénom</label>
+          <input type="text" name="first_name" value="{{ post.first_name }}" placeholder="Jean">
+        </div>
+        <div class="field">
+          <label>Nom</label>
+          <input type="text" name="last_name" value="{{ post.last_name }}" placeholder="Dupont">
+        </div>
+      </div>
+
       <div class="field">
-        <label>Nom</label>
-        <input type="text" name="last_name" value="{{ post.last_name }}" placeholder="Dupont">
+        <label>Email <span style="color:#EF5350">*</span></label>
+        <input type="email" name="email" value="{{ post.email }}" placeholder="vous@exemple.com"
+               class="{% if errors.email %}error-field{% endif %}" required autofocus>
       </div>
-    </div>
 
-    <div class="field">
-      <label>Email <span style="color:#EF5350">*</span></label>
-      <input type="email" name="email" value="{{ post.email }}" placeholder="vous@exemple.com"
-             class="{% if errors.email %}error-field{% endif %}" required autofocus>
-    </div>
+      <div class="field">
+        <label>Mot de passe <span style="color:#EF5350">*</span></label>
+        <input type="password" name="password" placeholder="8 caractères minimum"
+               class="{% if errors.password %}error-field{% endif %}" required>
+      </div>
 
-    <div class="field">
-      <label>Mot de passe <span style="color:#EF5350">*</span></label>
-      <input type="password" name="password" placeholder="8 caractères minimum"
-             class="{% if errors.password %}error-field{% endif %}" required>
-    </div>
+      <div class="field">
+        <label>Confirmer le mot de passe <span style="color:#EF5350">*</span></label>
+        <input type="password" name="password2" placeholder="••••••••"
+               class="{% if errors.password2 %}error-field{% endif %}" required>
+      </div>
 
-    <div class="field">
-      <label>Confirmer le mot de passe <span style="color:#EF5350">*</span></label>
-      <input type="password" name="password2" placeholder="••••••••"
-             class="{% if errors.password2 %}error-field{% endif %}" required>
-    </div>
+      <button type="submit" class="btn">Créer mon compte</button>
+    </form>
 
-    <button type="submit" class="btn">Créer mon compte</button>
-  </form>
-
-  <div class="divider"></div>
-  <p class="hint">Déjà un compte ? <a href="/accounts/login/?next={{ next|urlencode }}">Se connecter</a></p>
+    <div class="divider"></div>
+    <p class="hint">Déjà un compte ? <a href="/accounts/login/?next={{ next|urlencode }}">Se connecter</a></p>
+  {% endif %}
 </div>
 </body>
 </html>

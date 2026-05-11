@@ -28,7 +28,7 @@ from .utils import (
     log_user_activity,
     generate_otp,
     send_password_reset_email, store_otp, verify_otp,
-    send_email_otp, send_sms_otp,
+    send_email_otp, send_sms_otp, send_verification_email,
 )
 
 
@@ -271,13 +271,54 @@ class SignupView(APIView):
         serializer = UserRegistrationSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
-            refresh = RefreshToken.for_user(user)
+            send_verification_email(user)
             return Response({
-                'user': UserSerializer(user).data,
-                'access': str(refresh.access_token),
-                'refresh': str(refresh),
+                'message': 'Compte créé. Vérifiez votre email pour activer votre compte.',
+                'email': user.email,
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class VerifyEmailView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email', '').strip().lower()
+        code = request.data.get('code', '').strip()
+        if not email or not code:
+            return Response({'error': 'email et code requis.'}, status=400)
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({'error': 'Utilisateur introuvable.'}, status=404)
+        if user.email_verified:
+            return Response({'message': 'Email déjà vérifié. Vous pouvez vous connecter.'})
+        if not verify_otp(f'email_verify:{user.id}', code):
+            return Response({'error': 'Code invalide ou expiré.'}, status=400)
+        user.email_verified = True
+        user.save(update_fields=['email_verified'])
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            'message': 'Email vérifié avec succès.',
+            'access': str(refresh.access_token),
+            'refresh': str(refresh),
+            'user': UserSerializer(user).data,
+        })
+
+    def get(self, request):
+        """Renvoie un nouveau code de vérification."""
+        email = request.query_params.get('email', '').strip().lower()
+        if not email:
+            return Response({'error': 'email requis.'}, status=400)
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({'error': 'Utilisateur introuvable.'}, status=404)
+        if user.email_verified:
+            return Response({'message': 'Email déjà vérifié.'})
+        send_verification_email(user)
+        masked = f"{email[:3]}***@{email.split('@')[-1]}"
+        return Response({'message': f'Code renvoyé à {masked}.'})
         
 @method_decorator(ratelimit(key='ip', rate='100/m', method='POST', block=True), name='post')
 @method_decorator(csrf_exempt, name='dispatch')
@@ -307,6 +348,13 @@ class LoginView(APIView):
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.validated_data['user']
+
+            if not user.email_verified:
+                return Response({
+                    'error': 'email_not_verified',
+                    'message': 'Veuillez vérifier votre adresse email avant de vous connecter.',
+                    'email': user.email,
+                }, status=status.HTTP_403_FORBIDDEN)
 
             # Reset lockout on successful password auth
             if raw_id:

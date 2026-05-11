@@ -248,5 +248,10 @@ FIREBASE_CREDENTIALS_PATH = os.getenv('FIREBASE_CREDENTIALS_PATH', None)
 CSRF_TRUSTED_ORIGINS = [
     "https://sso-backend-6b1e.onrender.com",
 ]
-CSRF_COOKIE_SECURE = True
-SESSION_COOKIE_SECURE = True
+if DEBUG:
+    CSRF_TRUSTED_ORIGINS += ["http://localhost:8000", "http://127.0.0.1:8000"]
+
+# Secure cookies only over HTTPS (production). HTTP localhost dev must have these False
+# or the browser drops the session cookie and PKCE flow breaks.
+CSRF_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_SECURE = not DEBUG

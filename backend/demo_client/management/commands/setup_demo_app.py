@@ -1,10 +1,12 @@
 import os
 from django.core.management.base import BaseCommand
 
-REDIRECT_URI = os.getenv(
-    'DEMO_REDIRECT_URI',
-    'http://localhost:8000/demo/callback/',
-)
+# Space-separated list accepted by django-oauth-toolkit.
+# Always includes localhost for local development plus whatever is in env.
+_PROD_URI = os.getenv('DEMO_REDIRECT_URI', '').strip()
+REDIRECT_URIS = 'http://localhost:8000/demo/callback/'
+if _PROD_URI and _PROD_URI != 'http://localhost:8000/demo/callback/':
+    REDIRECT_URIS = f'{REDIRECT_URIS} {_PROD_URI}'
 
 
 class Command(BaseCommand):
@@ -18,7 +20,7 @@ class Command(BaseCommand):
             defaults={
                 'client_type': Application.CLIENT_CONFIDENTIAL,
                 'authorization_grant_type': Application.GRANT_AUTHORIZATION_CODE,
-                'redirect_uris': REDIRECT_URI,
+                'redirect_uris': REDIRECT_URIS,
                 'skip_authorization': False,
             },
         )
@@ -28,5 +30,5 @@ class Command(BaseCommand):
             f'Demo app {verb}.\n'
             f'  Client ID:     {app.client_id}\n'
             f'  Client Secret: {app.client_secret}\n'
-            f'  Redirect URI:  {REDIRECT_URI}'
+            f'  Redirect URIs: {REDIRECT_URIS}'
         ))

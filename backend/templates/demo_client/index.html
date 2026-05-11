@@ -149,7 +149,11 @@
     document.getElementById('qr-frame').innerHTML = '<div class="qr-spinner"></div>';
 
     try {
-      const resp = await fetch('/api/qr-login/generate/', {method: 'POST'});
+      const resp = await fetch('/api/qr-login/generate/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+      });
+      if (!resp.ok) { throw new Error(`HTTP ${resp.status}`); }
       const data = await resp.json();
       currentToken = data.token;
 

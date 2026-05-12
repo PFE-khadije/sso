@@ -7,6 +7,7 @@ from rest_framework import status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.views.decorators.csrf import csrf_exempt
+from django.shortcuts import render
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.decorators import action
 from django.utils.decorators import method_decorator
@@ -618,6 +619,18 @@ class PasswordResetRequestView(APIView):
 
 class PasswordResetConfirmView(APIView):
     permission_classes = [AllowAny]
+
+    def get(self, request):
+        token = request.query_params.get('token')
+        invalid = True
+        if token:
+            try:
+                reset = PasswordResetToken.objects.get(token=token, used=False)
+                if reset.created_at >= timezone.now() - timedelta(hours=1):
+                    invalid = False
+            except PasswordResetToken.DoesNotExist:
+                pass
+        return render(request, 'users/password_reset_confirm.html', {'invalid': invalid})
 
     def post(self, request):
         token = request.query_params.get('token')

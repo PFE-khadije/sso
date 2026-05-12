@@ -7,7 +7,16 @@ from rest_framework import status
 from .models import IdentityDocument
 from .serializers import IdentityDocumentSerializer
 import datetime
+from difflib import SequenceMatcher
 from .utils import verify_id_card, extract_card_text, extract_document_info, compare_names
+
+
+def _field_match(a, b, threshold=0.65):
+    """Direct fuzzy match between two short name strings — no length minimum."""
+    if not a or not b:
+        return False
+    a, b = a.lower().strip(), b.lower().strip()
+    return a in b or b in a or SequenceMatcher(None, a, b).ratio() >= threshold
 
 
 class IdentityStatusView(APIView):
@@ -89,10 +98,13 @@ class IdentityUploadView(APIView):
 
             name_mismatch = False
             if ai_first and ai_last:
-                # AI returned structured names — compare directly
-                first_ok = compare_names(user.first_name, f"{ai_first} {ai_last}")
-                last_ok = compare_names(user.last_name, f"{ai_first} {ai_last}")
-                if first_ok is False and last_ok is False:
+                # AI returned structured names — use direct field comparison.
+                # compare_names() requires ≥20 chars so it always returns None for
+                # short individual names; _field_match() has no length restriction.
+                # Accept either Western (first→first, last→last) or Eastern order.
+                forward = _field_match(user.first_name, ai_first) and _field_match(user.last_name, ai_last)
+                reversed_ = _field_match(user.first_name, ai_last) and _field_match(user.last_name, ai_first)
+                if not (forward or reversed_):
                     name_mismatch = True
             elif len(raw_text.strip()) >= 20:
                 # Fall back to fuzzy OCR text search

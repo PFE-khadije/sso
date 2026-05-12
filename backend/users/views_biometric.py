@@ -1,5 +1,7 @@
 import json
 import logging
+from django.utils.decorators import method_decorator
+from django_ratelimit.decorators import ratelimit
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -26,7 +28,7 @@ def _check_liveness_strict(image_bytes):
     liveness = check_liveness(image_bytes)
     if 'error' in liveness:
         return Response({'error': _LIVENESS_SERVICE_ERROR}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-    if not liveness.get('live', False):
+    if not liveness.get('liveness', False):
         return Response({'error': _LIVENESS_FAIL}, status=status.HTTP_401_UNAUTHORIZED)
     return None
 
@@ -226,6 +228,7 @@ class BiometricDeleteView(APIView):
             return Response({'error': 'Aucun profil trouvé'}, status=status.HTTP_404_NOT_FOUND)
 
 
+@method_decorator(ratelimit(key='ip', rate='20/m', method='POST', block=True), name='post')
 class BiometricIdentifyView(APIView):
     """1-to-N face identification — no identifier required.
     Searches all enrolled users by cosine similarity."""

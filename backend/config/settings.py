@@ -162,7 +162,7 @@ def oidc_claims_provider(user, scopes, claims):
 
     if 'phone' in scope_set:
         claims['phone_number'] = str(user.phone) if user.phone else None
-        claims['phone_number_verified'] = False
+        claims['phone_number_verified'] = bool(user.phone)
 
     return claims
 
@@ -242,7 +242,6 @@ if not ENCRYPTION_KEY and DEBUG:
 
 # AI Service
 AI_SERVICE_URL = os.getenv('AI_SERVICE_URL', 'https://sso-ai-microservice.onrender.com')
-AI_SERVICE_KEY = os.getenv('AI_SERVICE_KEY', None)
 
 # Firebase / FCM
 # Download your service account key from Firebase console → Project settings → Service accounts
@@ -260,3 +259,17 @@ if DEBUG:
 # or the browser drops the session cookie and PKCE flow breaks.
 CSRF_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_SECURE = not DEBUG
+
+# SMS MFA — set SMS_PROVIDER_KEY in .env once a real SMS provider is wired up.
+# Without it, SMS method is hidden from users to avoid silent no-op delivery.
+SMS_ENABLED = bool(os.getenv('SMS_PROVIDER_KEY', ''))
+
+# Production HTTPS / HSTS (Render terminates TLS and forwards X-Forwarded-Proto)
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = True
+    SECURE_HSTS_SECONDS = 31536000          # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'

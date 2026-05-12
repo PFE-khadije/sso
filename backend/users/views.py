@@ -3,6 +3,7 @@ import qrcode
 import io
 import base64
 from datetime import timedelta
+from django.conf import settings
 from rest_framework import status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -69,7 +70,7 @@ class OIDCUserInfoView(APIView):
         if "phone" in scopes:
             claims.update({
                 "phone_number": str(user.phone) if user.phone else None,
-                "phone_number_verified": False,
+                "phone_number_verified": bool(user.phone),
             })
 
         return Response(claims)
@@ -85,7 +86,7 @@ class UserInfoView(APIView):
             "email": user.email,
             "email_verified": user.email_verified,
             "phone": str(user.phone) if user.phone else None,
-            "phone_verified": False,
+            "phone_verified": bool(user.phone),
             "preferred_username": user.email.split('@')[0] if user.email else "",
         }
         return Response(data, status=status.HTTP_200_OK)
@@ -280,6 +281,8 @@ class SignupView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+@method_decorator(ratelimit(key='ip', rate='10/h', method='POST', block=True), name='post')
+@method_decorator(ratelimit(key='ip', rate='30/h', method='GET', block=True), name='get')
 class VerifyEmailView(APIView):
     permission_classes = [AllowAny]
 
@@ -395,10 +398,22 @@ class LoginView(APIView):
                 access_token = refresh.access_token
                 access_token['mfa'] = True
                 access_token.set_exp(lifetime=timedelta(minutes=5))
-                mfa_methods = MFAMethod.objects.filter(user=user, is_active=True).values_list('method_type', flat=True)
+                mfa_methods = list(MFAMethod.objects.filter(user=user, is_active=True).values_list('method_type', flat=True))
+                if not getattr(settings, 'SMS_ENABLED', False):
+                    mfa_methods = [m for m in mfa_methods if m != 'sms']
+                if not mfa_methods:
+                    # All configured methods are unavailable (e.g. only SMS, not yet enabled).
+                    # Fall through to a normal login so the user is not permanently locked out.
+                    refresh = RefreshToken.for_user(user)
+                    user_data = UserSerializer(user).data
+                    return Response({
+                        'access': str(refresh.access_token),
+                        'refresh': str(refresh),
+                        'user': user_data,
+                    })
                 return Response({
                     'mfa_required': True,
-                    'mfa_methods': list(mfa_methods),
+                    'mfa_methods': mfa_methods,
                     'mfa_token': str(access_token)
                 })
             else:
@@ -445,7 +460,7 @@ class TOTPEnableView(APIView):
             return Response({'detail': 'TOTP already activated.'}, status=status.HTTP_400_BAD_REQUEST)
 
         secret = pyotp.random_base32()
-        totp_uri = pyotp.totp.TOTP(secret).provisioning_uri(name=user.email, issuer_name="MaPlateforme")
+        totp_uri = pyotp.totp.TOTP(secret).provisioning_uri(name=user.email, issuer_name="NovaGard")
         qr = qrcode.make(totp_uri)
         buffer = io.BytesIO()
         qr.save(buffer, format="PNG")
@@ -497,6 +512,7 @@ class TOTPDisableView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+@method_decorator(ratelimit(key='ip', rate='10/m', method='POST', block=True), name='post')
 class TOTPVerifyView(APIView):
     permission_classes = [AllowAny]
 
@@ -601,6 +617,7 @@ class MFAVerifyView(APIView):
             }
         })
 
+@method_decorator(ratelimit(key='ip', rate='5/h', method='POST', block=True), name='post')
 class PasswordResetRequestView(APIView):
     permission_classes = [AllowAny]
 
@@ -715,6 +732,8 @@ class SendOTPView(APIView):
             send_email_otp(destination, otp)
             masked = f"{destination[:3]}***@{destination.split('@')[-1]}"
         else:
+            if not getattr(settings, 'SMS_ENABLED', False):
+                return Response({'detail': 'Le MFA par SMS n\'est pas disponible pour le moment.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
             destination = mfa_method.destination or str(user.phone)
             send_sms_otp(destination, otp)
             masked = f"***{destination[-4:]}"
@@ -765,6 +784,8 @@ class SMSOTPEnableView(APIView):
 
     def get(self, request):
         """Step 1 — send a verification OTP to the user's phone."""
+        if not getattr(settings, 'SMS_ENABLED', False):
+            return Response({'detail': 'Le MFA par SMS n\'est pas disponible pour le moment.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         user = request.user
         if not user.phone:
             return Response({'detail': 'Aucun numéro de téléphone associé au compte.'}, status=400)

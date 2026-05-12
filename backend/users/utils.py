@@ -136,11 +136,8 @@ AI_SERVICE_URL = getattr(settings, 'AI_SERVICE_URL', None)
 if not AI_SERVICE_URL:
     raise ImproperlyConfigured("AI_SERVICE_URL must be defined in settings (e.g., 'http://localhost:5001')")
 
-AI_SERVICE_KEY = getattr(settings, 'AI_SERVICE_KEY', None)
-
 def _ai_headers():
-    """Returns auth headers for the AI microservice."""
-    return {'X-API-Key': AI_SERVICE_KEY} if AI_SERVICE_KEY else {}
+    return {}
 
 def _ai_error(response):
     """Extracts a human-readable error from an AI service error response."""
@@ -432,17 +429,24 @@ def compare_names(registered_name, ocr_text, threshold=0.65):
 # ── Device auto-registration ──────────────────────────────────────────────────
 def auto_register_device(user, request):
     """Creates or updates a TrustedDevice after any successful authentication."""
+    import hashlib
     from .models import TrustedDevice
     fingerprint = request.META.get('HTTP_X_DEVICE_FINGERPRINT')
     if not fingerprint:
         return
     device_name = request.META.get('HTTP_X_DEVICE_NAME', 'Mobile Device')
     expires_at = timezone.now() + datetime.timedelta(days=30)
+    forwarded = request.META.get('HTTP_X_FORWARDED_FOR', '')
+    last_ip = (forwarded.split(',')[0].strip() if forwarded else request.META.get('REMOTE_ADDR', ''))[:45] or None
+    ua_raw = request.META.get('HTTP_USER_AGENT', '')
+    ua_hash = hashlib.sha256(ua_raw.encode()).hexdigest()[:64] if ua_raw else None
     TrustedDevice.objects.update_or_create(
         user=user,
         device_fingerprint=fingerprint,
         defaults={
             'device_name': device_name,
             'expires_at': expires_at,
+            'last_ip': last_ip,
+            'ua_hash': ua_hash,
         },
     )

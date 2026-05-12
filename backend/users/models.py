@@ -127,6 +127,8 @@ class TrustedDevice(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='trusted_devices')
     device_name = models.CharField(max_length=255)
     device_fingerprint = models.CharField(max_length=255)
+    last_ip = models.GenericIPAddressField(null=True, blank=True)
+    ua_hash = models.CharField(max_length=64, null=True, blank=True)
     last_used = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()

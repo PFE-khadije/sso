@@ -51,7 +51,16 @@ class ClientViewSet(viewsets.ModelViewSet):
                 'identity_status': getattr(doc, 'status', None),
                 'has_document': doc is not None,
             })
-        client = serializer.save(owner=user)
+        # Pick the cheapest active plan automatically when the caller didn't
+        # send one, so the create-company UI doesn't have to force a plan choice
+        # during initial onboarding. The owner can change plans later.
+        plan = serializer.validated_data.get('plan')
+        if plan is None:
+            plan = Plan.objects.filter(is_active=True).order_by('price_monthly', 'id').first()
+            if plan is None:
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError({'plan': ["Aucun plan d'abonnement n'est disponible."]})
+        client = serializer.save(owner=user, plan=plan)
         ClientUser.objects.create(client=client, user=user, role='admin')
 
     @action(detail=True, methods=['get', 'post'], url_path='apps')

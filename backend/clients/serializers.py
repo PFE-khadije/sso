@@ -10,10 +10,17 @@ class PlanSerializer(serializers.ModelSerializer):
 
 # --- ClientSerializer (basic) ---
 class ClientSerializer(serializers.ModelSerializer):
+    # plan is optional from the API caller's perspective. If the new client
+    # owner doesn't pick one, perform_create() falls back to the cheapest
+    # active Plan. The model itself still requires a plan FK at the DB level,
+    # which is fine because the view always provides one before .save().
     class Meta:
         model = Client
         fields = ['id', 'name', 'slug', 'plan', 'logo', 'primary_color', 'is_active']
         read_only_fields = ['slug', 'is_active']
+        extra_kwargs = {
+            'plan': {'required': False, 'allow_null': True},
+        }
 
 # --- ClientDetailSerializer (uses PlanSerializer) ---
 class ClientDetailSerializer(serializers.ModelSerializer):

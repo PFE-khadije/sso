@@ -9,5 +9,4 @@ router.register(r'plans', PlanViewSet, basename='plan')
 
 urlpatterns = [
     path('', include(router.urls)),
-    
 ]

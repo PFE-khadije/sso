@@ -20,9 +20,10 @@ from .serializers import (
 from .models import Plan
 from .serializers import PlanSerializer
 from oauth2_provider.models import Application
-from users.permissions import HasRole  
+from users.permissions import HasRole
 
 User = get_user_model()
+
 
 class ClientViewSet(viewsets.ModelViewSet):
     serializer_class = ClientSerializer
@@ -37,8 +38,21 @@ class ClientViewSet(viewsets.ModelViewSet):
         return ClientSerializer
 
     def perform_create(self, serializer):
-        client = serializer.save(owner=self.request.user)
-        ClientUser.objects.create(client=client, user=self.request.user, role='admin')
+        # A Client can only be created by a user whose identity document has
+        # been approved. End-users without an approved IdentityDocument are
+        # blocked here with a 403 so we never end up with a "ghost" company
+        # owned by an unverified person.
+        user = self.request.user
+        doc = getattr(user, 'identity_document', None)
+        if doc is None or doc.status != 'approved':
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied({
+                'detail': "Votre identite n'est pas verifiee. Verifiez votre piece d'identite via l'application mobile avant de creer une organisation.",
+                'identity_status': getattr(doc, 'status', None),
+                'has_document': doc is not None,
+            })
+        client = serializer.save(owner=user)
+        ClientUser.objects.create(client=client, user=user, role='admin')
 
     @action(detail=True, methods=['get', 'post'], url_path='apps')
     def apps(self, request, pk=None):

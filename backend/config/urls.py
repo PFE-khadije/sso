@@ -26,7 +26,6 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('users.urls')),
     path('api/', include('clients.urls')),
-    path('demo/', include('demo_client.urls')),
     path('o/userinfo/', OIDCUserInfoView.as_view(), name='userinfo'),
     path('o/', include('oauth2_provider.urls', namespace='oauth2_provider')),
     path('.well-known/openid-configuration', ConnectDiscoveryInfoView.as_view(), name='oidc-discovery'),

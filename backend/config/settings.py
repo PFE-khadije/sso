@@ -36,7 +36,6 @@ INSTALLED_APPS = [
     'django_ratelimit',
     'users',
     'clients',
-    'demo_client',
 ]
 
 REST_FRAMEWORK = {

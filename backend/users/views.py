@@ -107,6 +107,27 @@ class UserMeView(APIView):
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    def delete(self, request):
+        """Self-service hard delete of the authenticated user's own account.
+        Related rows (biometric profile, identity document, devices, FCM tokens,
+        MFA methods, activity log, password reset tokens, OAuth tokens) are
+        removed via on_delete=CASCADE. Refresh tokens are blacklisted first so
+        any in-flight session can't be reused after the row is gone."""
+        user = request.user
+        # Best-effort: blacklist any outstanding refresh tokens for this user.
+        try:
+            from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
+            for ot in OutstandingToken.objects.filter(user=user):
+                try:
+                    RefreshToken(ot.token).blacklist()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        log_user_activity(user, 'account_deleted', "Self-service account deletion", request)
+        user.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class ChangePasswordView(APIView):
     permission_classes = [IsAuthenticated]

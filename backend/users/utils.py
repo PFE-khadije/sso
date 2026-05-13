@@ -292,7 +292,8 @@ def cosine_sim(a, b):
 _OCR_SERVICE_URL = "https://cheikhabdelkader.pythonanywhere.com/ocr"
 
 def extract_card_text(image_bytes):
-    """Extracts raw text from an ID card image via the NovaID OCR service."""
+    """Extracts raw text from an ID card image via the NovaID OCR service.
+    Handles both the new nested {"data": {...}} shape and older flat shapes."""
     try:
         response = requests.post(
             _OCR_SERVICE_URL,
@@ -300,11 +301,23 @@ def extract_card_text(image_bytes):
             timeout=30,
         )
         if response.ok:
-            data = response.json()
-            # Service may return {'text': '...'} or {'raw_text': '...'} or plain text
-            if isinstance(data, dict):
-                return data.get('text') or data.get('raw_text') or ''
-            return str(data)
+            payload = response.json()
+            if isinstance(payload, dict):
+                data = payload.get('data') if isinstance(payload.get('data'), dict) else payload
+                # Prefer an explicit text blob if the service provides one;
+                # otherwise stitch one together from the structured fields so
+                # downstream fuzzy-search code still has content to match on.
+                explicit = data.get('text') or data.get('raw_text')
+                if explicit:
+                    return explicit
+                parts = [
+                    data.get('first_name_fl'), data.get('last_name_fl'),
+                    data.get('first_name_ll'), data.get('last_name_ll'),
+                    data.get('birth_place_fl'), data.get('birth_place_ll'),
+                    data.get('birth_date'), data.get('nni'),
+                ]
+                return ' '.join(str(p) for p in parts if p)
+            return str(payload)
     except Exception:
         pass
     return ''
@@ -313,7 +326,24 @@ def extract_card_text(image_bytes):
 def extract_document_info(image_bytes):
     """Extracts structured info from an ID document.
     Priority: NovaID OCR service → regex fallback on raw OCR text.
-    Returns dict: {first_name, last_name, birth_date, doc_number, raw_text}"""
+
+    The NovaID OCR currently returns:
+        {
+          "data": {
+            "first_name_fl": "Khadija",   "first_name_ll": "خديج",
+            "last_name_fl":  "Abdellahi", "last_name_ll":  "عبد الله",
+            "birth_date":    "YYYY-MM-DD",
+            "birth_place_fl": "...",      "birth_place_ll": "...",
+            "gender":         "F" | "M",
+            "nationality_iso": "MRT",
+            "nni":            "..."
+          },
+          "images": { "base64": "..." }
+        }
+    Returns a flat dict consumable by the verification flow:
+        {first_name, last_name, first_name_ar, last_name_ar,
+         birth_date, doc_number, raw_text, source}
+    """
     import re
 
     # 1. NovaID OCR service — may return structured fields directly
@@ -324,18 +354,50 @@ def extract_document_info(image_bytes):
             timeout=30,
         )
         if ocr_resp.ok:
-            data = ocr_resp.json()
-            if isinstance(data, dict):
-                # If the service returns structured fields, use them
-                first_name = data.get('first_name') or data.get('prenom')
-                last_name = data.get('last_name') or data.get('nom')
+            payload = ocr_resp.json()
+            if isinstance(payload, dict):
+                # NovaID nests the structured fields inside a "data" key;
+                # fall back to top-level for older / alternate response shapes.
+                data = payload.get('data') if isinstance(payload.get('data'), dict) else payload
+                # Latin / French spelling — primary match target
+                first_name = (
+                    data.get('first_name_fl')
+                    or data.get('first_name')
+                    or data.get('prenom')
+                )
+                last_name = (
+                    data.get('last_name_fl')
+                    or data.get('last_name')
+                    or data.get('nom')
+                )
+                # Arabic spelling — used as a secondary match target
+                first_name_ar = data.get('first_name_ll') or data.get('first_name_ar')
+                last_name_ar = data.get('last_name_ll') or data.get('last_name_ar')
                 birth_date = data.get('birth_date') or data.get('date_naissance')
-                doc_number = data.get('doc_number') or data.get('numero')
+                doc_number = (
+                    data.get('nni')
+                    or data.get('doc_number')
+                    or data.get('numero')
+                )
                 raw_text = data.get('text') or data.get('raw_text') or ''
-                if any([first_name, last_name, birth_date, doc_number, raw_text]):
+                # If the service didn't include a flat text blob, build one
+                # from every known field so legacy fuzzy-on-text fallbacks
+                # still have something meaningful to search.
+                if not raw_text:
+                    parts = [
+                        first_name, last_name, first_name_ar, last_name_ar,
+                        data.get('birth_place_fl'), data.get('birth_place_ll'),
+                        str(birth_date) if birth_date else '',
+                        str(doc_number) if doc_number else '',
+                    ]
+                    raw_text = ' '.join(p for p in parts if p)
+                if any([first_name, last_name, first_name_ar, last_name_ar,
+                        birth_date, doc_number, raw_text]):
                     return {
                         'first_name': first_name,
                         'last_name': last_name,
+                        'first_name_ar': first_name_ar,
+                        'last_name_ar': last_name_ar,
                         'birth_date': birth_date,
                         'doc_number': doc_number,
                         'raw_text': raw_text,
@@ -359,6 +421,8 @@ def extract_document_info(image_bytes):
     return {
         'first_name': None,
         'last_name': None,
+        'first_name_ar': None,
+        'last_name_ar': None,
         'birth_date': birth_date,
         'doc_number': doc_number,
         'raw_text': raw_text,
@@ -385,6 +449,87 @@ def compare_names(registered_name, ocr_text, threshold=0.65):
 
 
 # ── Device auto-registration ──────────────────────────────────────────────────
+def auto_register_device(user, request):
+    """Creates or updates a TrustedDevice after any successful authentication."""
+    import hashlib
+    from .models import TrustedDevice
+    fingerprint = request.META.get('HTTP_X_DEVICE_FINGERPRINT')
+    if not fingerprint:
+        return
+    device_name = request.META.get('HTTP_X_DEVICE_NAME', 'Mobile Device')
+    expires_at = timezone.now() + datetime.timedelta(days=30)
+    forwarded = request.META.get('HTTP_X_FORWARDED_FOR', '')
+    last_ip = (forwarded.split(',')[0].strip() if forwarded else request.META.get('REMOTE_ADDR', ''))[:45] or None
+    ua_raw = request.META.get('HTTP_USER_AGENT', '')
+    ua_hash = hashlib.sha256(ua_raw.encode()).hexdigest()[:64] if ua_raw else None
+    TrustedDevice.objects.update_or_create(
+        user=user,
+        device_fingerprint=fingerprint,
+        defaults={
+            'device_name': device_name,
+            'expires_at': expires_at,
+            'last_ip': last_ip,
+            'ua_hash': ua_hash,
+        },
+    )
+last_name_ar,
+                        birth_date, doc_number, raw_text]):
+                    return {
+                        'first_name': first_name,
+                        'last_name': last_name,
+                        'first_name_ar': first_name_ar,
+                        'last_name_ar': last_name_ar,
+                        'birth_date': birth_date,
+                        'doc_number': doc_number,
+                        'raw_text': raw_text,
+                        'source': 'ocr',
+                    }
+    except requests.RequestException:
+        pass
+
+    # 2. Parse whatever raw text we have from OCR
+    raw_text = extract_card_text(image_bytes)
+
+    date_pattern = r'\b(\d{2}[./]\d{2}[./]\d{4})\b'
+    dates = re.findall(date_pattern, raw_text)
+    birth_date = dates[0] if len(dates) >= 1 else None
+
+    doc_number = None
+    num_match = re.search(r'\b([A-Z0-9]{8,12})\b', raw_text)
+    if num_match:
+        doc_number = num_match.group(1)
+
+    return {
+        'first_name': None,
+        'last_name': None,
+        'first_name_ar': None,
+        'last_name_ar': None,
+        'birth_date': birth_date,
+        'doc_number': doc_number,
+        'raw_text': raw_text,
+        'source': 'ocr',
+    }
+
+
+def compare_names(registered_name, ocr_text, threshold=0.65):
+    """Checks whether registered_name appears (fuzzy) in OCR text.
+    Returns True if found, False if clearly absent, None if text is too short to judge."""
+    if not registered_name or not ocr_text:
+        return None
+    if len(ocr_text.strip()) < 20:
+        return None
+    name = registered_name.lower().strip()
+    text = ocr_text.lower()
+    if name in text:
+        return True
+    n = len(name)
+    for i in range(len(text) - n + 1):
+        if SequenceMatcher(None, name, text[i:i + n]).ratio() >= threshold:
+            return True
+    return False
+
+
+# ââ Device auto-registration ââââââââââââââââââââââââââââââ
 def auto_register_device(user, request):
     """Creates or updates a TrustedDevice after any successful authentication."""
     import hashlib

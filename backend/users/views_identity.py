@@ -10,12 +10,20 @@ from difflib import SequenceMatcher
 from .utils import verify_id_card, extract_card_text, extract_document_info, compare_names
 
 
-def _field_match(a, b, threshold=0.65):
-    """Direct fuzzy match between two short name strings — no length minimum."""
+def _field_match(a, b, threshold=0.75, min_substr=4):
+    """Direct fuzzy match between two name strings.
+    Substring matches are only accepted when the shorter side is at least
+    `min_substr` characters long — this prevents short two- or three-letter
+    names ("Ali", "Al") from accidentally matching unrelated text via the
+    `a in b` shortcut. Falls back to a SequenceMatcher ratio comparison."""
     if not a or not b:
         return False
     a, b = a.lower().strip(), b.lower().strip()
-    return a in b or b in a or SequenceMatcher(None, a, b).ratio() >= threshold
+    if len(a) >= min_substr and a in b:
+        return True
+    if len(b) >= min_substr and b in a:
+        return True
+    return SequenceMatcher(None, a, b).ratio() >= threshold
 
 
 class IdentityStatusView(APIView):
@@ -80,18 +88,30 @@ class IdentityUploadView(APIView):
             doc_info = extract_document_info(front_bytes)
             raw_text = doc_info.get('raw_text', '')
 
-            # Names from OCR extraction (may be None if the OCR service returns raw text only)
-            ai_first = doc_info.get('first_name')
-            ai_last = doc_info.get('last_name')
+            # Names from OCR extraction. The NovaID OCR returns both Latin
+            # (first_name_fl / last_name_fl) and Arabic (first_name_ll /
+            # last_name_ll) spellings; we accept a match against either, since
+            # the user may have registered with either script.
+            ai_first_candidates = [
+                n for n in (doc_info.get('first_name'), doc_info.get('first_name_ar')) if n
+            ]
+            ai_last_candidates = [
+                n for n in (doc_info.get('last_name'), doc_info.get('last_name_ar')) if n
+            ]
 
             name_mismatch = False
-            if ai_first and ai_last:
+            if ai_first_candidates and ai_last_candidates:
                 # AI returned structured names — use direct field comparison.
-                # compare_names() requires ≥20 chars so it always returns None for
-                # short individual names; _field_match() has no length restriction.
-                # Accept either Western (first→first, last→last) or Eastern order.
-                forward = _field_match(user.first_name, ai_first) and _field_match(user.last_name, ai_last)
-                reversed_ = _field_match(user.first_name, ai_last) and _field_match(user.last_name, ai_first)
+                # Accept either Western (first→first, last→last) or Eastern order,
+                # and try every script variant the OCR provided.
+                forward = (
+                    any(_field_match(user.first_name, f) for f in ai_first_candidates)
+                    and any(_field_match(user.last_name, l) for l in ai_last_candidates)
+                )
+                reversed_ = (
+                    any(_field_match(user.first_name, l) for l in ai_last_candidates)
+                    and any(_field_match(user.last_name, f) for f in ai_first_candidates)
+                )
                 if not (forward or reversed_):
                     name_mismatch = True
             elif len(raw_text.strip()) >= 20:

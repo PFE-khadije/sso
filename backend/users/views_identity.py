@@ -111,7 +111,7 @@ class IdentityUploadView(APIView):
                 ai_result = verify_id_card(front_bytes, selfie_bytes)
                 if 'error' not in ai_result:
                     reviewed_at = timezone.now()
-                    if ai_result.get('match'):
+                    if ai_result.get('verified'):
                         doc_status = 'approved'
                     else:
                         doc_status = 'rejected'
@@ -125,3 +125,6 @@ class IdentityUploadView(APIView):
 
         serializer.save(**save_kwargs)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+

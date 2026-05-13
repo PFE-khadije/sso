@@ -110,7 +110,6 @@ class MFAMethod(models.Model):
 class BiometricProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='biometric_profile')
     encrypted_embedding = models.TextField()  # stocké chiffré
-    liveness_score_enrollment = models.FloatField(null=True, blank=True)  # optionnel
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

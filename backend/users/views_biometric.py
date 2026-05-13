@@ -13,24 +13,10 @@ from .models import User, BiometricProfile
 from .utils import (
     encrypt_value, decrypt_value, log_user_activity,
     extract_embedding, verify_face,
-    cosine_sim, check_liveness, auto_register_device,
+    cosine_sim, auto_register_device,
 )
 
 logger = logging.getLogger(__name__)
-
-
-_LIVENESS_SERVICE_ERROR = 'Le service de vérification de vivacité est indisponible. Réessayez dans quelques instants.'
-_LIVENESS_FAIL = 'Liveness check échoué. Regardez directement la caméra et réessayez.'
-
-
-def _check_liveness_strict(image_bytes):
-    """Returns a Response to send immediately, or None if liveness passed."""
-    liveness = check_liveness(image_bytes)
-    if 'error' in liveness:
-        return Response({'error': _LIVENESS_SERVICE_ERROR}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-    if not liveness.get('liveness', False):
-        return Response({'error': _LIVENESS_FAIL}, status=status.HTTP_401_UNAUTHORIZED)
-    return None
 
 
 class BiometricEnrollView(APIView):
@@ -47,10 +33,6 @@ class BiometricEnrollView(APIView):
 
         try:
             image_bytes = image_file.read()
-
-            liveness_response = _check_liveness_strict(image_bytes)
-            if liveness_response is not None:
-                return liveness_response
 
             result = extract_embedding(image_bytes)
 
@@ -126,10 +108,6 @@ class BiometricLoginView(APIView):
             )
 
         image_bytes = image_file.read()
-
-        liveness_response = _check_liveness_strict(image_bytes)
-        if liveness_response is not None:
-            return liveness_response
 
         # Check biometric profile
         try:
@@ -243,10 +221,6 @@ class BiometricIdentifyView(APIView):
             return Response({'error': 'Image requise'}, status=status.HTTP_400_BAD_REQUEST)
 
         image_bytes = image_file.read()
-
-        liveness_response = _check_liveness_strict(image_bytes)
-        if liveness_response is not None:
-            return liveness_response
 
         # Extract embedding from the query image
         emb_result = extract_embedding(image_bytes)

@@ -6,7 +6,6 @@ from rest_framework.response import Response
 from rest_framework import status
 from .models import IdentityDocument
 from .serializers import IdentityDocumentSerializer
-import datetime
 from difflib import SequenceMatcher
 from .utils import verify_id_card, extract_card_text, extract_document_info, compare_names
 
@@ -25,20 +24,14 @@ class IdentityStatusView(APIView):
     def get(self, request):
         try:
             doc = request.user.identity_document
-            expiry_date = doc.expiry_date
-            days_until_expiry = None
-            if expiry_date:
-                days_until_expiry = (expiry_date - datetime.date.today()).days
             return Response({
                 'has_document': True,
                 'status': doc.status,
                 'document_type': doc.document_type,
                 'rejection_reason': doc.rejection_reason or None,
-                'expiry_date': expiry_date.isoformat() if expiry_date else None,
-                'days_until_expiry': days_until_expiry,
             })
         except IdentityDocument.DoesNotExist:
-            return Response({'has_document': False, 'status': None, 'document_type': None, 'rejection_reason': None, 'expiry_date': None, 'days_until_expiry': None})
+            return Response({'has_document': False, 'status': None, 'document_type': None, 'rejection_reason': None})
 
 
 class IdentityUploadView(APIView):
@@ -51,16 +44,11 @@ class IdentityUploadView(APIView):
         try:
             existing = user.identity_document
             if existing.status == 'approved':
-                # Allow re-upload only if the document has already expired
-                if existing.expiry_date and existing.expiry_date < datetime.date.today():
-                    existing.delete()
-                else:
-                    return Response(
-                        {'detail': 'Identity already verified.'},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-            else:
-                existing.delete()
+                return Response(
+                    {'detail': 'Identity already verified.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            existing.delete()
         except IdentityDocument.DoesNotExist:
             pass
 
@@ -92,7 +80,7 @@ class IdentityUploadView(APIView):
             doc_info = extract_document_info(front_bytes)
             raw_text = doc_info.get('raw_text', '')
 
-            # Names from AI extraction (None if AI service lacks /extract-document endpoint)
+            # Names from OCR extraction (may be None if the OCR service returns raw text only)
             ai_first = doc_info.get('first_name')
             ai_last = doc_info.get('last_name')
 
@@ -118,17 +106,7 @@ class IdentityUploadView(APIView):
                 rejection_reason = "Le nom sur la pièce d'identité ne correspond pas aux informations de votre compte."
                 reviewed_at = timezone.now()
 
-            # Step 2: Parse expiry date from document and store it
-            expiry_str = doc_info.get('expiry_date')
-            if expiry_str:
-                for fmt in ('%d/%m/%Y', '%d.%m.%Y', '%Y-%m-%d'):
-                    try:
-                        save_kwargs['expiry_date'] = datetime.datetime.strptime(expiry_str, fmt).date()
-                        break
-                    except ValueError:
-                        continue
-
-            # Step 3: AI face verification — selfie vs document photo (skip if already rejected)
+            # Step 2: AI face verification — selfie vs document photo (skip if already rejected)
             if doc_status != 'rejected':
                 ai_result = verify_id_card(front_bytes, selfie_bytes)
                 if 'error' not in ai_result:

@@ -136,6 +136,6 @@ class IdentityDocumentSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'document_type', 'front_image', 'back_image',
             'selfie_image', 'status', 'rejection_reason',
-            'expiry_date', 'submitted_at', 'reviewed_at',
+            'submitted_at', 'reviewed_at',
         ]
-        read_only_fields = ['status', 'rejection_reason', 'expiry_date', 'submitted_at', 'reviewed_at']
+        read_only_fields = ['status', 'rejection_reason', 'submitted_at', 'reviewed_at']

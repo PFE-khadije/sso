@@ -288,21 +288,6 @@ def cosine_sim(a, b):
     return dot / (norm_a * norm_b)
 
 
-def check_liveness(image_bytes):
-    """Calls /liveness AI endpoint. Returns {'live': bool, 'score': float} or {'error': str}.
-    If the service is unreachable, returns {'error': ...} so callers can degrade gracefully."""
-    files = {'image': ('image.jpg', image_bytes, 'image/jpeg')}
-    try:
-        response = requests.post(f"{AI_SERVICE_URL}/liveness", files=files, headers=_ai_headers(), timeout=15)
-        if response.ok:
-            return response.json()
-        return {'error': _ai_error(response)}
-    except requests.exceptions.Timeout:
-        return {'error': 'Service IA: timeout'}
-    except requests.RequestException as e:
-        return {'error': f"Erreur réseau: {str(e)}"}
-
-
 # ── OCR helpers ───────────────────────────────────────────────────────────────
 _OCR_SERVICE_URL = "https://cheikhabdelkader.pythonanywhere.com/ocr"
 
@@ -327,34 +312,11 @@ def extract_card_text(image_bytes):
 
 def extract_document_info(image_bytes):
     """Extracts structured info from an ID document.
-    Priority: AI microservice /extract-document → NovaID OCR service → empty result.
-    Returns dict: {first_name, last_name, birth_date, expiry_date, doc_number, raw_text}"""
+    Priority: NovaID OCR service → regex fallback on raw OCR text.
+    Returns dict: {first_name, last_name, birth_date, doc_number, raw_text}"""
     import re
 
-    # 1. Try AI microservice structured extraction
-    files = {'image': ('document.jpg', image_bytes, 'image/jpeg')}
-    try:
-        response = requests.post(
-            f"{AI_SERVICE_URL}/extract-document",
-            files=files,
-            headers=_ai_headers(),
-            timeout=30,
-        )
-        if response.ok:
-            data = response.json()
-            return {
-                'first_name': data.get('first_name') or data.get('prenom'),
-                'last_name': data.get('last_name') or data.get('nom'),
-                'birth_date': data.get('birth_date') or data.get('date_naissance'),
-                'expiry_date': data.get('expiry_date') or data.get('date_expiration'),
-                'doc_number': data.get('doc_number') or data.get('numero'),
-                'raw_text': data.get('raw_text', ''),
-                'source': 'ai',
-            }
-    except requests.RequestException:
-        pass
-
-    # 2. Fallback: NovaID OCR service — may return structured fields directly
+    # 1. NovaID OCR service — may return structured fields directly
     try:
         ocr_resp = requests.post(
             _OCR_SERVICE_URL,
@@ -368,7 +330,6 @@ def extract_document_info(image_bytes):
                 first_name = data.get('first_name') or data.get('prenom')
                 last_name = data.get('last_name') or data.get('nom')
                 birth_date = data.get('birth_date') or data.get('date_naissance')
-                expiry_date = data.get('expiry_date') or data.get('date_expiration')
                 doc_number = data.get('doc_number') or data.get('numero')
                 raw_text = data.get('text') or data.get('raw_text') or ''
                 if any([first_name, last_name, birth_date, doc_number, raw_text]):
@@ -376,7 +337,6 @@ def extract_document_info(image_bytes):
                         'first_name': first_name,
                         'last_name': last_name,
                         'birth_date': birth_date,
-                        'expiry_date': expiry_date,
                         'doc_number': doc_number,
                         'raw_text': raw_text,
                         'source': 'ocr',
@@ -384,13 +344,12 @@ def extract_document_info(image_bytes):
     except requests.RequestException:
         pass
 
-    # 3. Parse whatever raw text we have from OCR
+    # 2. Parse whatever raw text we have from OCR
     raw_text = extract_card_text(image_bytes)
 
     date_pattern = r'\b(\d{2}[./]\d{2}[./]\d{4})\b'
     dates = re.findall(date_pattern, raw_text)
     birth_date = dates[0] if len(dates) >= 1 else None
-    expiry_date = dates[-1] if len(dates) >= 2 else None
 
     doc_number = None
     num_match = re.search(r'\b([A-Z0-9]{8,12})\b', raw_text)
@@ -401,7 +360,6 @@ def extract_document_info(image_bytes):
         'first_name': None,
         'last_name': None,
         'birth_date': birth_date,
-        'expiry_date': expiry_date,
         'doc_number': doc_number,
         'raw_text': raw_text,
         'source': 'ocr',

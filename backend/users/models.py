@@ -171,7 +171,6 @@ class IdentityDocument(models.Model):
     selfie_image = models.ImageField(upload_to='identity/selfie/')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     rejection_reason = models.TextField(blank=True)
-    expiry_date = models.DateField(null=True, blank=True)
     submitted_at = models.DateTimeField(auto_now_add=True)
     reviewed_at = models.DateTimeField(null=True, blank=True)
 

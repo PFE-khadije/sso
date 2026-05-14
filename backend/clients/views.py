@@ -63,6 +63,17 @@ class ClientViewSet(viewsets.ModelViewSet):
         client = serializer.save(owner=user, plan=plan)
         ClientUser.objects.create(client=client, user=user, role='admin')
 
+    @staticmethod
+    def _client_subscription_active(client):
+        """True iff the client is currently allowed to consume paid features
+        (create OAuth apps, invite extra members, etc.). Mirrors the
+        `subscription_active` field surfaced by ClientSerializer."""
+        if not client.is_active:
+            return False
+        if client.subscription_end is None:
+            return True
+        return client.subscription_end > timezone.now()
+
     @action(detail=True, methods=['get', 'post'], url_path='apps')
     def apps(self, request, pk=None):
         client = self.get_object()
@@ -71,13 +82,33 @@ class ClientViewSet(viewsets.ModelViewSet):
             serializer = ClientApplicationSerializer(apps, many=True)
             return Response(serializer.data)
         elif request.method == 'POST':
+            # Block app creation when the client has no active subscription.
+            # The Client.plan FK always exists (perform_create assigns one),
+            # but the subscription itself can be expired or the client may have
+            # been deactivated by an admin. In either case, surface a clear
+            # error rather than silently creating a paid resource.
+            if not self._client_subscription_active(client):
+                return Response(
+                    {
+                        'detail': "Aucun abonnement actif. Mettez a jour votre plan avant de creer une application OAuth.",
+                        'subscription_active': False,
+                        'subscription_end': client.subscription_end,
+                        'is_active': client.is_active,
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
             data = request.data
             plain_secret = generate_client_secret()
+            # algorithm must be set explicitly on the Application row, otherwise
+            # /o/token/ raises ImproperlyConfigured("does not support signed
+            # tokens") whenever a client requests the openid scope. RS256 is the
+            # OIDC default and matches the JWKS our backend already publishes.
             app = Application.objects.create(
                 name=data['name'],
                 client_type=data.get('client_type', 'confidential'),
                 authorization_grant_type=data.get('grant_type', 'authorization-code'),
                 redirect_uris=data.get('redirect_uris', ''),
+                algorithm=data.get('algorithm', 'RS256'),
                 user=request.user
             )
             app.client_secret = plain_secret

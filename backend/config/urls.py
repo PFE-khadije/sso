@@ -18,11 +18,13 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.http import HttpResponse
 from oauth2_provider.views.oidc import ConnectDiscoveryInfoView
 from django.contrib.auth import views as auth_views
 from users.views import OIDCUserInfoView
 
 urlpatterns = [
+    path('favicon.ico', lambda request: HttpResponse(status=204)),
     path('admin/', admin.site.urls),
     path('api/', include('users.urls')),
     path('api/', include('clients.urls')),

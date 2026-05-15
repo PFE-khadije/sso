@@ -35,12 +35,26 @@ class IdentityStatusView(APIView):
     def get(self, request):
         try:
             doc = request.user.identity_document
-            return Response({
+            resp = {
                 'has_document': True,
                 'status': doc.status,
                 'document_type': doc.document_type,
                 'rejection_reason': doc.rejection_reason or None,
-            })
+            }
+            if doc.status == 'approved':
+                resp['ocr'] = {
+                    'first_name_fl': doc.ocr_first_name_fl,
+                    'last_name_fl': doc.ocr_last_name_fl,
+                    'first_name_ar': doc.ocr_first_name_ar,
+                    'last_name_ar': doc.ocr_last_name_ar,
+                    'birth_date': doc.ocr_birth_date,
+                    'doc_number': doc.ocr_doc_number,
+                    'birth_place_fl': doc.ocr_birth_place_fl,
+                    'birth_place_ar': doc.ocr_birth_place_ar,
+                    'gender': doc.ocr_gender,
+                    'nationality': doc.ocr_nationality,
+                }
+            return Response(resp)
         except IdentityDocument.DoesNotExist:
             return Response({'has_document': False, 'status': None, 'document_type': None, 'rejection_reason': None})
 
@@ -87,6 +101,19 @@ class IdentityUploadView(APIView):
 
             doc_info = extract_document_info(front_bytes)
             raw_text = doc_info.get('raw_text', '')
+
+            save_kwargs.update({
+                'ocr_first_name_fl': doc_info.get('first_name') or '',
+                'ocr_last_name_fl': doc_info.get('last_name') or '',
+                'ocr_first_name_ar': doc_info.get('first_name_ar') or '',
+                'ocr_last_name_ar': doc_info.get('last_name_ar') or '',
+                'ocr_birth_date': str(doc_info.get('birth_date') or ''),
+                'ocr_doc_number': str(doc_info.get('doc_number') or ''),
+                'ocr_birth_place_fl': doc_info.get('birth_place_fl') or '',
+                'ocr_birth_place_ar': doc_info.get('birth_place_ar') or '',
+                'ocr_gender': doc_info.get('gender') or '',
+                'ocr_nationality': doc_info.get('nationality') or '',
+            })
 
             ai_first_candidates = [
                 n for n in (doc_info.get('first_name'), doc_info.get('first_name_ar')) if n

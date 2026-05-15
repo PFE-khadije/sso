@@ -402,6 +402,10 @@ def extract_document_info(image_bytes):
                         'doc_number': doc_number,
                         'raw_text': raw_text,
                         'source': 'ocr',
+                        'birth_place_fl': data.get('birth_place_fl') or '',
+                        'birth_place_ar': data.get('birth_place_ll') or '',
+                        'gender': data.get('gender') or '',
+                        'nationality': data.get('nationality_iso') or '',
                     }
     except requests.RequestException:
         pass
@@ -427,6 +431,10 @@ def extract_document_info(image_bytes):
         'doc_number': doc_number,
         'raw_text': raw_text,
         'source': 'ocr',
+        'birth_place_fl': '',
+        'birth_place_ar': '',
+        'gender': '',
+        'nationality': '',
     }
 
 

@@ -173,6 +173,18 @@ class IdentityDocument(models.Model):
     submitted_at = models.DateTimeField(auto_now_add=True)
     reviewed_at = models.DateTimeField(null=True, blank=True)
 
+    # OCR-extracted data (saved on upload, returned to mobile when approved)
+    ocr_first_name_fl = models.CharField(max_length=150, blank=True, default='')
+    ocr_last_name_fl = models.CharField(max_length=150, blank=True, default='')
+    ocr_first_name_ar = models.CharField(max_length=150, blank=True, default='')
+    ocr_last_name_ar = models.CharField(max_length=150, blank=True, default='')
+    ocr_birth_date = models.CharField(max_length=20, blank=True, default='')
+    ocr_doc_number = models.CharField(max_length=50, blank=True, default='')
+    ocr_birth_place_fl = models.CharField(max_length=200, blank=True, default='')
+    ocr_birth_place_ar = models.CharField(max_length=200, blank=True, default='')
+    ocr_gender = models.CharField(max_length=5, blank=True, default='')
+    ocr_nationality = models.CharField(max_length=10, blank=True, default='')
+
     def __str__(self):
         return f"{self.user.email} – {self.document_type} ({self.status})"
 

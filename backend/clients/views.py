@@ -247,6 +247,42 @@ class ClientViewSet(viewsets.ModelViewSet):
             'authentications_last_30_days': auth_count,
         })
 
+class OAuthAppByClientIdView(APIView):
+    """
+    Manage an OAuth application directly by its client_id string.
+    Accepts GET / PATCH / DELETE at /api/oauth-apps/<client_id>/
+    """
+    permission_classes = [IsAuthenticated]
+
+    def _get_client_app(self, oauth_client_id, user):
+        app = get_object_or_404(Application, client_id=oauth_client_id)
+        client_app = get_object_or_404(ClientApplication, application=app)
+        if not ClientUser.objects.filter(client=client_app.client, user=user).exists():
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied()
+        return client_app
+
+    def get(self, request, oauth_client_id):
+        client_app = self._get_client_app(oauth_client_id, request.user)
+        return Response(ClientApplicationSerializer(client_app).data)
+
+    def patch(self, request, oauth_client_id):
+        client_app = self._get_client_app(oauth_client_id, request.user)
+        app = client_app.application
+        for field in ('name', 'redirect_uris', 'client_type', 'authorization_grant_type'):
+            if field in request.data:
+                setattr(app, field, request.data[field])
+        app.save()
+        return Response(ClientApplicationSerializer(client_app, context={'request': request}).data)
+
+    def delete(self, request, oauth_client_id):
+        client_app = self._get_client_app(oauth_client_id, request.user)
+        app = client_app.application
+        client_app.delete()
+        app.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class PlanViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Read-only viewset for plans (accessible by authenticated users).
